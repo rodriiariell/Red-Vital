@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String       @id @default(uuid())
+  email        String       @unique
+  passwordHash String?      @map("password_hash")
+  role         String
+  status       String       @default("ACTIVE")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  deletedAt    DateTime?    @map("deleted_at")
+  profile      Profile?
+  requests     BloodRequest[] @relation("RequestOwner")
+  refreshTokens RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  auditEvents  AuditLog[]   @relation("AuditActor")
+
+  @@map("users")
+}
+
+model Profile {
+  id          String    @id @default(uuid())
+  userId      String    @unique @map("user_id")
+  firstName   String    @map("first_name")
+  lastName    String    @map("last_name")
+  phone       String?
+  bloodType   String    @map("blood_type")
+  rhFactor    String    @map("rh_factor")
+  city        String
+  available   Boolean   @default(false)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@map("profiles")
+}
+
+model BloodRequest {
+  id           String   @id @default(uuid())
+  ownerId      String   @map("owner_id")
+  bloodType    String   @map("blood_type")
+  rhFactor     String   @map("rh_factor")
+  hospital     String
+  city         String
+  priority     String
+  contactPhone String   @map("contact_phone")
+  contactEmail String   @map("contact_email")
+  description  String
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  resolvedAt   DateTime? @map("resolved_at")
+  owner        User               @relation("RequestOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, status])
+  @@index([status, bloodType, rhFactor])
+  @@map("blood_requests")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  actorId   String?  @map("actor_id")
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  actor     User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entity, entityId])
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
+}

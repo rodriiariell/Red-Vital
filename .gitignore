@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example
+apps/api/generated/
+apps/api/prisma/generated/
+apps/api/prisma/dev.db
+apps/api/prisma/dev.db-journal
+apps/api/prisma/dev.db-shm
+apps/api/prisma/dev.db-wal
