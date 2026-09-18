@@ -1,6 +1,8 @@
-import{KEYS,read,write,uid}from'./storage.js';import{findLocationProvince}from'./cities.js';
-export const getUsers=()=>read(KEYS.users,[]);
-export const getUser=id=>getUsers().find(u=>u.id===id)||null;
-export function createUser(data){const users=getUsers(),email=String(data.email??'').trim().toLowerCase();if(users.some(u=>String(u.email??'').trim().toLowerCase()===email))throw new Error('Este email ya está registrado.');const user={id:uid('usr'),createdAt:new Date().toISOString(),...data,province:data.province||findLocationProvince(data.city),email};users.push(user);write(KEYS.users,users);return user}
-export function updateUser(id,changes){const users=getUsers(),index=users.findIndex(u=>u.id===id);if(index<0)throw new Error('Usuario inexistente.');users[index]={...users[index],...changes,province:changes.province||findLocationProvince(changes.city)||users[index].province,id:users[index].id,password:users[index].password};write(KEYS.users,users);return users[index]}
-export function updatePassword(id,password){const users=getUsers(),index=users.findIndex(u=>u.id===id);if(index<0)throw new Error('Usuario inexistente.');users[index]={...users[index],password};write(KEYS.users,users);return users[index]}
+import { KEYS, read, write, uid } from "./storage.js";
+import { findLocationProvince } from "./cities.js";
+
+export const getUsers = () => window.__REDVITAL_API_AUTH ? [] : read(KEYS.users, []);
+export const getUser = (id) => getUsers().find((user) => user.id === id) || null;
+export function createUser(data) { if (window.__REDVITAL_API_AUTH) return { id: "api-user", ...data }; const users = getUsers(); const email = String(data.email ?? "").trim().toLowerCase(); if (users.some((user) => String(user.email ?? "").trim().toLowerCase() === email)) throw new Error("Este email ya está registrado."); const user = { id: uid("usr"), createdAt: new Date().toISOString(), ...data, province: data.province || findLocationProvince(data.city), email }; users.push(user); write(KEYS.users, users); return user; }
+export function updateUser(id, changes) { if (window.__REDVITAL_API_AUTH) return { ...changes, id }; const users = getUsers(); const index = users.findIndex((user) => user.id === id); if (index < 0) throw new Error("Usuario inexistente."); users[index] = { ...users[index], ...changes, province: changes.province || findLocationProvince(changes.city) || users[index].province, id: users[index].id, password: users[index].password }; write(KEYS.users, users); return users[index]; }
+export function updatePassword(id, password) { if (window.__REDVITAL_API_AUTH) return null; const users = getUsers(); const index = users.findIndex((user) => user.id === id); if (index < 0) throw new Error("Usuario inexistente."); users[index] = { ...users[index], password }; write(KEYS.users, users); return users[index]; }

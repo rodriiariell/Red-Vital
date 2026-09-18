@@ -6,6 +6,7 @@ export function setFlash(text,type='success'){sessionStorage.setItem(KEYS.flash,
 export function takeFlash(){const flash=readSession(KEYS.flash,null);sessionStorage.removeItem(KEYS.flash);return flash}
 function readSession(key,fallback){try{const value=sessionStorage.getItem(key);return value?JSON.parse(value):fallback}catch{return fallback}}
 export function seedDemo(){
+ if(window.__REDVITAL_API_AUTH)return;
  if(localStorage.getItem(KEYS.seeded))return;
  const users=[
   {id:'demo_donor',firstName:'Sofía',lastName:'Donante Demo',email:'donante@demo.redvital',password:'Demo1234',phone:'5491100000001',bloodType:'O',rh:'+',city:'Córdoba',role:'donor',available:true,demo:true},

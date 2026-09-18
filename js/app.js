@@ -1,6 +1,6 @@
 import{seedDemo,setFlash,resetDemo}from'./storage.js';import{renderShell,showMessage,showFormMessage,hideFormMessage,requestCard,action,initials,confirmDialog,escapeText,formatDate}from'./ui.js';import{activeUser,login,requireAuth}from'./auth.js';import{createUser,getUser,getUsers,updateUser,updatePassword}from'./users.js';import{createRequest,getRequests,getRequest,updateRequest,resolveRequest,activeRequests,compatibleRequests,setRequestStatus}from'./requests.js';import{validEmail,validPassword,validPhone,values,validate,clean,formatPersonName}from'./validation.js';import{compatibilityNotice}from'./compatibility.js';import{CITIES,normalizeCity,attachCityAutocomplete}from'./cities.js';
-import{priorityBadge}from'./priorities.js';
-seedDemo();renderShell();const page=document.body.dataset.page;const q=new URLSearchParams(location.search);const $=s=>document.querySelector(s);if((page==='panel'||page==='perfil')&&activeUser()?.role==='admin')location.replace('admin.html');
+import{priorityBadge}from'./priorities.js';import{loadCurrentUser}from'./auth.js';import{initWebApiAuth}from'./web-auth.js';
+seedDemo();await loadCurrentUser().catch(()=>null);renderShell();const page=document.body.dataset.page;const q=new URLSearchParams(location.search);const $=s=>document.querySelector(s);if((page==='panel'||page==='perfil')&&activeUser()?.role==='admin')location.replace('admin.html');
 if(page==='perfil'){const participationStyles=document.createElement('link');participationStyles.rel='stylesheet';participationStyles.href='css/participation.css';document.head.append(participationStyles)}
 queueMicrotask(()=>{
  const form=document.querySelector('#register-form'),donorFields=document.querySelector('#donor-fields');
