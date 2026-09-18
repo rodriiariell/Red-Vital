@@ -2,7 +2,29 @@
   "name": "@redvital/mobile",
   "version": "0.1.0",
   "private": true,
+  "main": "expo/AppEntry.js",
   "scripts": {
-    "dev": "node -e \"console.log('La app Expo se iniciará en la etapa móvil; aún no hay pantallas ni dependencias de Expo.')\""
+    "start": "expo start",
+    "dev": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@react-navigation/native": "^7.1.18",
+    "@react-navigation/native-stack": "^7.3.26",
+    "@redvital/api-client": "*",
+    "expo": "^57.0.0",
+    "expo-secure-store": "~15.0.8",
+    "expo-status-bar": "~3.0.8",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-safe-area-context": "^5.6.0",
+    "react-native-screens": "^4.16.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "typescript": "~5.9.2"
   }
 }

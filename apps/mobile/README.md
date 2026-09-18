@@ -1,5 +1,14 @@
-# App móvil futura
+# RedVital Mobile
 
-Este workspace reserva la aplicación React Native + Expo para Android e iOS. No contiene pantallas, dependencias ni lógica móvil en esta etapa, por decisión de alcance.
+Aplicación Expo/React Native con TypeScript para autenticación mobile real.
 
-Cuando se inicie la etapa móvil, consumirá `@redvital/api-client` y la misma API central que la web.
+## Desarrollo
+
+```bash
+npm run start --workspace=@redvital/mobile
+npm run check --workspace=@redvital/mobile
+```
+
+La API se configura con `EXPO_PUBLIC_API_BASE_URL`. Por defecto usa `http://127.0.0.1:3001` en iOS/web y `http://10.0.2.2:3001` en Android Emulator.
+
+La app utiliza access tokens en memoria y guarda únicamente el refresh token en `expo-secure-store`. Las solicitudes mobile usan `Authorization: Bearer` y rotación de refresh tokens.

@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "RedVital",
+    "slug": "redvital",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": { "backgroundColor": "#FFF9F7" },
+    "assetBundlePatterns": ["**/*"]
+  }
+}
