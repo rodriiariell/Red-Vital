@@ -9,6 +9,7 @@ import { PrismaAuthStore } from "./auth/prisma-store.js";
 import { authRoutes } from "./auth/routes.js";
 import type { AuthStore } from "./auth/types.js";
 import { configurePasswordHasher } from "./auth/crypto.js";
+import { bloodRequestRoutes } from "./blood-requests/routes.js";
 
 export async function buildApp(environment: Environment, providedStore?: AuthStore, passwordResetNotifier?: (token: string) => Promise<void>) {
   configurePasswordHasher(environment.PASSWORD_HASHER);
@@ -52,6 +53,7 @@ export async function buildApp(environment: Environment, providedStore?: AuthSto
     }
   }, async () => ({ status: "ok", service: "redvital-api" }));
   await app.register(authRoutes, { store, environment, passwordResetNotifier });
+  if (database) await app.register(bloodRequestRoutes, { database, environment });
   app.addHook("onClose", async () => { if (database) await database.$disconnect(); });
 
   app.setErrorHandler((error, _request, reply) => {
