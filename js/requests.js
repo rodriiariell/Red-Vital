@@ -1,0 +1,9 @@
+import{KEYS,read,write,uid}from'./storage.js';import{isCompatible}from'./compatibility.js';import{normalizePriority}from'./priorities.js';import{findLocationProvince}from'./cities.js';
+export const getRequests=()=>read(KEYS.requests,[]).map(request=>({...request,urgency:normalizePriority(request.urgency)}));
+export const getRequest=id=>getRequests().find(r=>r.id===id)||null;
+export function createRequest(data,ownerId){const list=getRequests();const item={id:uid('req'),ownerId,...data,province:data.province||findLocationProvince(data.city),urgency:normalizePriority(data.urgency),status:'active',createdAt:new Date().toISOString(),isExample:false};list.push(item);write(KEYS.requests,list);return item}
+export function updateRequest(id,ownerId,changes){const list=getRequests(),i=list.findIndex(r=>r.id===id);if(i<0)throw new Error('Solicitud inexistente.');if(list[i].ownerId!==ownerId)throw new Error('No tenés permiso para editar esta solicitud.');list[i]={...list[i],...changes,province:changes.province||findLocationProvince(changes.city)||list[i].province,id:list[i].id,ownerId:list[i].ownerId,createdAt:list[i].createdAt};write(KEYS.requests,list);return list[i]}
+export function resolveRequest(id,ownerId){return updateRequest(id,ownerId,{status:'resolved',resolvedAt:new Date().toISOString()})}
+export const activeRequests=()=>getRequests().filter(r=>r.status==='active');
+export const compatibleRequests=user=>activeRequests().filter(r=>isCompatible(user.bloodType,user.rh,r.bloodType,r.rh));
+export function setRequestStatus(id,status){const list=getRequests(),index=list.findIndex(r=>r.id===id);if(index<0)throw new Error('Solicitud inexistente.');list[index]={...list[index],status,resolvedAt:status==='resolved'?new Date().toISOString():undefined};write(KEYS.requests,list);return list[index]}

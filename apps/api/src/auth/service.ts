@@ -1,0 +1,18 @@
+import type { PublicRegistration } from "@redvital/domain";
+import { hashPassword, hashToken, randomToken, verifyPassword } from "./crypto.js";
+import { createAccessToken, expiryFromTtl } from "./tokens.js";
+import type { AuthStore, UserRecord } from "./types.js";
+import type { Environment } from "../config.js";
+
+export class AuthService {
+  constructor(private readonly store: AuthStore, private readonly environment: Environment, private readonly onPasswordReset: (token: string) => Promise<void> = async () => {}) {}
+  async register(input: PublicRegistration) { const existing = await this.store.findUserByEmail(input.email); if (existing) throw new AuthError(409, "Email already registered"); let created: UserRecord; try { created = await this.store.createUser({ email: input.email, passwordHash: await hashPassword(input.password), role: input.role, profile: { firstName: input.firstName, lastName: input.lastName, phone: input.phone, bloodType: input.bloodType, rhFactor: input.rhFactor, city: input.city, available: input.available } }); } catch (error) { if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2002") throw new AuthError(409, "Email already registered"); throw error; } await this.store.audit("AUTH_REGISTER", "User", created.id, created.id); return publicUser(created); }
+  async login(email: string, password: string) { const user = await this.store.findUserByEmail(email); if (!user || !user.passwordHash || user.status !== "active" || user.deletedAt || !(await verifyPassword(user.passwordHash, password))) { await this.store.audit("AUTH_LOGIN_FAILED", "Auth"); throw new AuthError(401, "Invalid credentials"); } await this.store.audit("AUTH_LOGIN_SUCCEEDED", "User", user.id, user.id); return this.createSession(user); }
+  async refresh(token: string) { const replacement = randomToken(); const user = await this.store.rotateRefreshToken(hashToken(token), hashToken(replacement), expiryFromTtl(this.environment.AUTH_REFRESH_TOKEN_TTL)); if (!user) throw new AuthError(401, "Invalid refresh token"); await this.store.audit("AUTH_REFRESH", "User", user.id, user.id); return this.createSession(user, replacement); }
+  async logout(token: string) { await this.store.revokeRefreshToken(hashToken(token)); await this.store.audit("AUTH_LOGOUT", "Auth"); }
+  async forgotPassword(email: string) { const user = await this.store.findUserByEmail(email); if (user && user.status === "active" && !user.deletedAt) { const token = randomToken(); await this.store.createPasswordResetToken(user.id, hashToken(token), expiryFromTtl(this.environment.AUTH_PASSWORD_RESET_TTL)); await this.store.audit("AUTH_PASSWORD_RESET_REQUESTED", "User", user.id, user.id); await this.onPasswordReset(token); } }
+  async resetPassword(token: string, password: string) { const user = await this.store.consumePasswordResetToken(hashToken(token), await hashPassword(password)); if (!user) throw new AuthError(400, "Invalid or expired reset token"); await this.store.audit("AUTH_PASSWORD_CHANGED", "User", user.id, user.id); }
+  async createSession(user: UserRecord, refreshToken = randomToken()) { await this.store.createRefreshToken(user.id, hashToken(refreshToken), expiryFromTtl(this.environment.AUTH_REFRESH_TOKEN_TTL)); return { user: publicUser(user), accessToken: await createAccessToken(user, this.environment), refreshToken }; }
+}
+export class AuthError extends Error { constructor(public readonly statusCode: number, message: string) { super(message); } }
+export const publicUser = (user: UserRecord) => ({ id: user.id, email: user.email, role: user.role, status: user.status });

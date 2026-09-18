@@ -1,0 +1,8 @@
+{
+  "name": "@redvital/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node -e \"console.log('La app Expo se iniciará en la etapa móvil; aún no hay pantallas ni dependencias de Expo.')\""
+  }
+}

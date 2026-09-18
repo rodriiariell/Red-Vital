@@ -1,0 +1,9 @@
+:root {
+  --red: #D62839; --burgundy: #861F41; --coral: #F25F5C; --navy: #17324D;
+  --warm: #FFF9F7; --gray: #F4F7FA; --white: #FFFFFF; --ink: #202733;
+  --muted: #667085; --success: #16865C; --warning: #E7A327; --danger-bg: #FFF0F1;
+  --space-1: .5rem; --space-2: .75rem; --space-3: 1rem; --space-4: 1.5rem; --space-5: 2rem; --space-6: 3rem;
+  --radius-sm: 10px; --radius: 18px; --radius-lg: 28px;
+  --shadow: 0 12px 36px rgba(23,50,77,.09); --max: 1180px;
+  --font-title: "Manrope", sans-serif; --font-body: "Inter", sans-serif;
+}

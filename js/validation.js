@@ -1,0 +1,7 @@
+export const clean=value=>String(value??'').trim();
+export const formatPersonName=value=>clean(value).replace(/\s+/g,' ').toLocaleLowerCase('es-AR').replace(/(^|\s)\p{L}/gu,letter=>letter.toLocaleUpperCase('es-AR'));
+export const validEmail=value=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean(value));
+export const validPassword=value=>String(value).length>=8&&/[A-Z]/.test(value)&&/[0-9]/.test(value);
+export const validPhone=value=>/^\+?[\d\s()-]{8,20}$/.test(clean(value));
+export function values(form){return Object.fromEntries(new FormData(form).entries())}
+export function validate(form,rules){let ok=true;form.querySelectorAll('.field-error').forEach(e=>e.textContent='');for(const[name,rule]of Object.entries(rules)){const input=form.elements[name];if(!input)continue;const controls=input instanceof Element?[input]:[...input],message=rule(input.value),target=form.querySelector(`[data-error="${name}"]`);if(target){target.setAttribute('aria-live','polite');if(!target.id)target.id=`${form.id||'form'}-${name}-error`;controls.forEach(control=>{const describedBy=new Set((control.getAttribute('aria-describedby')||'').split(/\s+/).filter(Boolean));describedBy.add(target.id);control.setAttribute('aria-describedby',[...describedBy].join(' '))})}if(message){ok=false;controls.forEach(control=>control.setAttribute('aria-invalid','true'));if(target)target.textContent=message}else controls.forEach(control=>control.removeAttribute('aria-invalid'))}return ok}

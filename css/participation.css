@@ -1,0 +1,14 @@
+.profile-availability-control:has(.profile-availability-checkbox:checked) {
+  border-color: rgba(22, 134, 92, 0.3);
+  background: #f0faf6;
+}
+
+.profile-availability-checkbox:checked + .profile-availability-indicator {
+  border-color: #16865c;
+  background: #16865c;
+}
+
+.profile-availability-checkbox:focus-visible + .profile-availability-indicator {
+  border-color: #16865c;
+  box-shadow: 0 0 0 3px rgba(22, 134, 92, 0.14);
+}

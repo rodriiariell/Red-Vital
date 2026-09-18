@@ -1,0 +1,13 @@
+/* Ajustes exclusivos del proceso de la sección "Cómo funciona". */
+.process-heading{margin:3.5rem auto 2rem}
+.features-heading{margin:5rem auto 2.5rem}
+
+.process-steps{grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(3rem,6vw,5rem) clamp(1.5rem,3.5vw,3.25rem);align-items:stretch}
+.process-steps:before{display:none}
+.process-steps .step{display:flex;flex-direction:column;align-items:center;min-height:238px;padding:2rem 1.5rem 1.75rem;border:1px solid rgba(214,40,57,.14);border-radius:18px;background:#fff;box-shadow:0 10px 24px rgba(23,50,77,.08);text-align:center}
+.process-steps .step .icon-box{width:66px;height:66px;margin:0 auto 1.35rem;border:0;border-radius:50%;background:linear-gradient(145deg,var(--red),var(--burgundy));color:#fff;font-family:var(--font-title);font-size:1.4rem;font-weight:800;box-shadow:0 6px 14px rgba(134,31,65,.2)}
+.process-steps .step h3{margin-bottom:.7rem}
+.process-steps .step p{max-width:245px;margin:0;line-height:1.65}
+
+@media(max-width:900px){.process-steps{grid-template-columns:repeat(2,minmax(0,1fr));gap:3.5rem 2rem}.process-steps .step{min-height:225px}}
+@media(max-width:640px){.process-heading{margin-top:3rem}.features-heading{margin-top:4rem}.process-steps{grid-template-columns:1fr;gap:1.5rem}.process-steps .step{min-height:0;padding:1.75rem 1.35rem}}
