@@ -7,8 +7,15 @@ export interface AuthenticatedUser { id: string; email: string; role: ApiRole; s
 export interface AuthSession { user: AuthenticatedUser; accessToken?: string; refreshToken?: string; }
 export interface UserProfile { firstName: string; lastName: string; phone: string | null; bloodType: "O" | "A" | "B" | "AB"; rhFactor: "+" | "-"; city: string; available: boolean; }
 export interface RegisterInput { firstName: string; lastName: string; email: string; password: string; phone: string; bloodType: "O" | "A" | "B" | "AB"; rhFactor: "+" | "-"; city: string; role: "donor" | "patient"; available?: boolean; }
-export interface BloodRequestInput { bloodType: "O" | "A" | "B" | "AB"; rhFactor: "+" | "-"; hospital: string; city: string; priority: "high" | "medium" | "low"; contactPhone: string; contactEmail: string; description: string; }
-export interface BloodRequest extends BloodRequestInput { id: string; status: "active" | "resolved"; createdAt: string; updatedAt: string; resolvedAt: string | null; }
+export type BloodType = "O" | "A" | "B" | "AB";
+export type RhFactor = "+" | "-";
+export type RequestPriority = "high" | "medium" | "low";
+export interface BloodRequestInput { bloodType: BloodType; rhFactor: RhFactor; hospital: string; city: string; priority: RequestPriority; contactPhone: string; contactEmail: string; description: string; }
+export type BloodRequestStatus = "active" | "resolved";
+export interface BloodRequestFilters { bloodType?: BloodType; city?: string; status?: BloodRequestStatus; }
+export type CreateBloodRequestInput = BloodRequestInput;
+export type UpdateBloodRequestInput = BloodRequestInput;
+export interface BloodRequest extends BloodRequestInput { id: string; status: BloodRequestStatus; createdAt: string; updatedAt: string; resolvedAt: string | null; }
 
 export interface RedVitalApiClientOptions {
   baseUrl: string;
@@ -46,11 +53,11 @@ export class RedVitalApiClient {
   async myProfile(): Promise<UserProfile | null> { return this.request("/users/me/profile", { method: "GET" }); }
   async updateMyProfile(input: Partial<UserProfile>): Promise<UserProfile> { return this.request("/users/me/profile", { method: "PATCH", body: JSON.stringify(input) }); }
   async requestAvailability(available: boolean): Promise<UserProfile> { return this.request("/users/me/availability", { method: "PATCH", body: JSON.stringify({ available }) }); }
-  async createBloodRequest(input: BloodRequestInput): Promise<BloodRequest> { return this.request("/blood-requests", { method: "POST", body: JSON.stringify(input) }); }
-  async listBloodRequests(filters: { bloodType?: string; city?: string; status?: string } = {}): Promise<BloodRequest[]> { const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value) as [string, string][]); return this.request(`/blood-requests${query.toString() ? `?${query}` : ""}`, { method: "GET" }); }
+  async createBloodRequest(input: CreateBloodRequestInput): Promise<BloodRequest> { return this.request("/blood-requests", { method: "POST", body: JSON.stringify(input) }); }
+  async listBloodRequests(filters: BloodRequestFilters = {}): Promise<BloodRequest[]> { const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value) as [string, string][]); return this.request(`/blood-requests${query.toString() ? `?${query}` : ""}`, { method: "GET" }); }
   async getBloodRequest(id: string): Promise<BloodRequest> { return this.request(`/blood-requests/${id}`, { method: "GET" }); }
   async myBloodRequests(): Promise<BloodRequest[]> { return this.request("/users/me/blood-requests", { method: "GET" }); }
-  async updateBloodRequest(id: string, input: BloodRequestInput): Promise<BloodRequest> { return this.request(`/blood-requests/${id}`, { method: "PATCH", body: JSON.stringify(input) }); }
+  async updateBloodRequest(id: string, input: UpdateBloodRequestInput): Promise<BloodRequest> { return this.request(`/blood-requests/${id}`, { method: "PATCH", body: JSON.stringify(input) }); }
   async resolveBloodRequest(id: string): Promise<BloodRequest> { return this.request(`/blood-requests/${id}/status`, { method: "PATCH", body: JSON.stringify({ status: "resolved" }) }); }
   private async request<T>(path: string, init: RequestInit, retried = false): Promise<T> { const headers = new Headers(init.headers); headers.set("content-type", "application/json"); if (this.accessToken) headers.set("authorization", `Bearer ${this.accessToken}`); const response = await this.fetchImplementation(`${this.baseUrl}${path}`, { ...init, headers, credentials: "include" }); if (response.status === 401 && !retried && this.unauthorizedHandler && !path.startsWith("/auth/refresh")) { if (await this.unauthorizedHandler()) return this.request<T>(path, init, true); } if (!response.ok) throw new Error(`API request failed: ${response.status}`); return response.status === 204 ? undefined as T : response.json() as Promise<T>; }
 }
