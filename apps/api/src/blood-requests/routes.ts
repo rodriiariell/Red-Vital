@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { bloodRequestInputSchema, bloodRequestStatusSchema } from "@redvital/domain";
+import { bloodRequestInputSchema, bloodRequestStatusSchema, isOrientativelyCompatible, normalizeLocality } from "@redvital/domain";
 import { z } from "zod";
 import { AuthError } from "../auth/service.js";
 import { authenticate, requireRoles } from "../auth/guards.js";
@@ -15,9 +15,19 @@ export async function bloodRequestRoutes(app: FastifyInstance, options: { databa
   const store = new BloodRequestStore(options.database);
   const auth = authenticate({ findUserById: async (id: string) => options.database.user.findUnique({ where: { id }, include: { profile: true } }).then((user: any) => user ? { ...user, role: user.role.toLowerCase(), status: user.status.toLowerCase(), profile: user.profile ? { ...user.profile, rhFactor: user.profile.rhFactor === "POSITIVE" ? "+" : "-" } : null } : null) } as any, options.environment);
   const ownerOrAdmin = async (request: any, id: string) => { const owner = await store.ownerId(id); if (!owner) throw new AuthError(404, "Blood request not found"); if (owner !== request.authUser.id && request.authUser.role !== "admin") throw new AuthError(403, "Forbidden"); return owner; };
+  const canViewDetail = (request: any, value: any) => {
+    if (value.ownerId === request.authUser.id || request.authUser.role === "admin") return true;
+    if (request.authUser.role !== "donor") return false;
+    const profile = request.authUser.profile;
+    return Boolean(
+      profile &&
+      normalizeLocality(profile.city) === normalizeLocality(value.city) &&
+      isOrientativelyCompatible(profile, value),
+    );
+  };
   app.post("/blood-requests", { preHandler: [auth, requireRoles("patient")], schema: { tags: ["blood-requests"], body: { type: "object" }, response: { 201: response } } }, async (request, reply) => { const created = await store.create(request.authUser!.id, parse(bloodRequestInputSchema, request.body)); await options.database.auditLog.create({ data: { action: "BLOOD_REQUEST_CREATED", entity: "BloodRequest", entityId: created.id, actorId: request.authUser!.id } }); return reply.code(201).send(created); });
   app.get("/blood-requests", { preHandler: auth, schema: { tags: ["blood-requests"], querystring: { type: "object", properties: { bloodType: { type: "string" }, city: { type: "string" }, status: { type: "string" } } }, response: { 200: { type: "array", items: response } } } }, async (request) => { const query = request.query as any; const status = query.status ? parse(bloodRequestStatusSchema, query.status.toLowerCase()) : undefined; return store.list({ bloodType: query.bloodType, city: query.city, status }); });
-  app.get("/blood-requests/:id", { preHandler: auth, schema: { tags: ["blood-requests"], params: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } }, response: { 200: response } } }, async (request) => { const { id } = parse(idParam, request.params); const value = await store.findById(id); if (!value) throw new AuthError(404, "Blood request not found"); return value; });
+  app.get("/blood-requests/:id", { preHandler: auth, schema: { tags: ["blood-requests"], params: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } }, response: { 200: response } } }, async (request) => { const { id } = parse(idParam, request.params); const value = await store.findById(id); if (!value) throw new AuthError(404, "Blood request not found"); const owner = await store.ownerId(id); if (!owner || !canViewDetail(request, { ...value, ownerId: owner })) throw new AuthError(403, "Forbidden"); return value; });
   app.get("/users/me/blood-requests", { preHandler: auth, schema: { tags: ["blood-requests"], response: { 200: { type: "array", items: response } } } }, async (request) => store.mine(request.authUser!.id));
   app.patch("/blood-requests/:id", { preHandler: auth, schema: { tags: ["blood-requests"], params: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } }, body: { type: "object" }, response: { 200: response } } }, async (request) => { const { id } = parse(idParam, request.params); await ownerOrAdmin(request, id); const updated = await store.update(id, parse(editable, request.body)); await options.database.auditLog.create({ data: { action: "BLOOD_REQUEST_UPDATED", entity: "BloodRequest", entityId: id, actorId: request.authUser!.id } }); return updated; });
   app.patch("/blood-requests/:id/status", { preHandler: auth, schema: { tags: ["blood-requests"], params: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } }, body: { type: "object", required: ["status"], properties: { status: { type: "string", enum: ["active", "resolved"] } } }, response: { 200: response } } }, async (request) => { const { id } = parse(idParam, request.params); await ownerOrAdmin(request, id); const status = parse(z.object({ status: bloodRequestStatusSchema }), request.body); if (status.status !== "resolved") throw new AuthError(400, "Only resolution is supported"); const resolved = await store.resolve(id); await options.database.auditLog.create({ data: { action: "BLOOD_REQUEST_RESOLVED", entity: "BloodRequest", entityId: id, actorId: request.authUser!.id } }); return resolved; });

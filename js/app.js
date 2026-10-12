@@ -1,99 +1,1146 @@
-import{seedDemo,setFlash,resetDemo}from'./storage.js';import{renderShell,showMessage,showFormMessage,hideFormMessage,requestCard,action,initials,confirmDialog,escapeText,formatDate}from'./ui.js';import{activeUser,login,requireAuth}from'./auth.js';import{createUser,getUser,getUsers,updateUser,updatePassword}from'./users.js';import{createRequest,getRequests,getRequest,updateRequest,resolveRequest,activeRequests,compatibleRequests,setRequestStatus}from'./requests.js';import{validEmail,validPassword,validPhone,values,validate,clean,formatPersonName}from'./validation.js';import{compatibilityNotice}from'./compatibility.js';import{CITIES,normalizeCity,attachCityAutocomplete}from'./cities.js';
-import{priorityBadge}from'./priorities.js';import{loadCurrentUser}from'./auth.js';import{initWebApiAuth}from'./web-auth.js';
-seedDemo();await loadCurrentUser().catch(()=>null);renderShell();const page=document.body.dataset.page;const q=new URLSearchParams(location.search);const $=s=>document.querySelector(s);if((page==='panel'||page==='perfil')&&activeUser()?.role==='admin')location.replace('admin.html');
-if(page==='perfil'){const participationStyles=document.createElement('link');participationStyles.rel='stylesheet';participationStyles.href='css/participation.css';document.head.append(participationStyles)}
-queueMicrotask(()=>{
- const form=document.querySelector('#register-form'),donorFields=document.querySelector('#donor-fields');
- if(!form||!donorFields)return;
- const available=form.elements.available,label=donorFields.querySelector('.availability-copy strong'),help=donorFields.querySelector('.availability-copy .help'),error=document.createElement('span');
- error.id='available-error';error.className='field-error';error.dataset.error='available';
- available.setAttribute('aria-describedby',error.id);donorFields.append(error);
- const clearAvailabilityError=()=>{available.removeAttribute('aria-invalid');error.textContent=''};
- available.addEventListener('change',()=>{if(available.checked)clearAvailabilityError()});
- const syncParticipationConfirmation=()=>{
-  const role=form.elements.role.value,hasRole=role==='donor'||role==='patient';
-  donorFields.hidden=!hasRole;
-  donorFields.classList.toggle('hidden',!hasRole);
-  available.checked=false;clearAvailabilityError();
-  if(role==='donor'){
-   label.textContent='Estoy dispuesto para donar';
-   help.textContent='La aptitud definitiva debe ser evaluada por el centro de salud.';
-  }else if(role==='patient'){
-   label.textContent='Estoy dispuesto a recibir donaciones';
-   help.textContent='La solicitud deberá coordinarse con el centro de salud correspondiente.';
-  }
- };
- form.querySelectorAll('input[name="role"]').forEach(role=>role.addEventListener('change',syncParticipationConfirmation));
- syncParticipationConfirmation();
- form.addEventListener('submit',event=>{
-  const role=form.elements.role.value;
-  if((role!=='donor'&&role!=='patient')||available.checked)return;
-  event.preventDefault();event.stopImmediatePropagation();
-  available.setAttribute('aria-invalid','true');
-  error.textContent=role==='donor'?'Debés confirmar que estás dispuesto a donar para registrarte como donante.':'Debés confirmar que estás dispuesto a recibir donaciones para continuar.';
-  available.focus();
- },true);
-});
-queueMicrotask(()=>{
- if(page!=='panel')return;
- const user=activeUser(),area=$('#dashboard-content');
- if(!user||!area)return;
- const text=user.role==='donor'?'Estoy dispuesto para donar':'Estoy dispuesto a recibir donaciones';
- let state=area.querySelector('.donor-availability');
- if(user.role==='patient'){
-  state=document.createElement('article');
-  state.className=`card donor-availability participation-state ${user.available?'is-available':'is-unavailable'}`;
-  state.innerHTML=`<div class="donor-availability-copy"><span class="dashboard-icon" aria-hidden="true">✓</span><div><span class="eyebrow">Participación</span><h2>${text}</h2><p>${user.available?'Estado activo.':'Estado desactivado.'}</p></div></div><div class="dashboard-actions"><a class="btn btn-outline" href="perfil.html">Cambiar participación</a></div>`;
-  area.prepend(state);
- }else{
-  state?.classList.add('participation-state');
-  const heading=state?.querySelector('h2');if(heading)heading.textContent=text;
- }
- state?.setAttribute('data-participation-role',user.role);
-});
-const preparePersonNameFields=form=>{const inputs=['firstName','lastName'].map(name=>form.elements[name]).filter(Boolean),normalize=()=>inputs.forEach(input=>{input.value=formatPersonName(input.value)});inputs.forEach(input=>{input.setAttribute('autocapitalize','words');input.addEventListener('blur',()=>{input.value=formatPersonName(input.value)})});form.addEventListener('submit',normalize);queueMicrotask(()=>{normalize();const heading=$('#profile-summary h1');if(heading)heading.textContent=inputs.map(input=>input.value).filter(Boolean).join(' ')})};
-const personNameForm=$('#register-form')||$('#profile-form');if(personNameForm)preparePersonNameFields(personNameForm);
-const setupLocationFields=form=>{if(!form?.elements.city)return null;const cityInput=form.elements.city,cityField=cityInput.closest('.field');let provinceInput=form.elements.province;if(!provinceInput){const field=document.createElement('div');field.className='field';field.innerHTML='<label for="province">Provincia</label><div class="city-autocomplete"><input id="province" name="province" type="text" autocomplete="off" aria-controls="province-suggestions"><div id="province-suggestions" class="city-suggestions" role="listbox" hidden></div></div><span class="field-error" data-error="province"></span>';cityField.before(field);provinceInput=field.querySelector('input')}const provinceList=provinceInput.closest('.city-autocomplete').querySelector('.city-suggestions'),cityList=cityInput.closest('.city-autocomplete')?.querySelector('.city-suggestions');let cityAutocomplete,provinceAutocomplete=attachProvinceAutocomplete(provinceInput,provinceList,{onSelect:value=>{cityAutocomplete?.clear();cityAutocomplete?.setProvince(value)},onInput:()=>{cityAutocomplete?.clear()}});cityAutocomplete=attachCityAutocomplete(cityInput,cityList,{province:()=>provinceInput.value,onSelect:(value,location)=>{if(!provinceAutocomplete.isValid()){provinceInput.value=location.province;provinceAutocomplete.setValue(location.province)}}});if(!provinceInput.value&&cityInput.value){const province=findLocationProvince(cityInput.value);if(province){provinceInput.value=province;provinceAutocomplete.setValue(province);cityAutocomplete.setProvince(province)}}return{province:provinceAutocomplete,city:cityAutocomplete}};
-const ensureFieldErrors=(form,names)=>names.forEach(name=>{if(form.querySelector(`[data-error="${name}"]`))return;const control=form.elements[name],field=control?.closest('.field');if(!field)return;const error=document.createElement('span');error.className='field-error';error.dataset.error=name;field.append(error)});
-const prepareFormErrorBehavior=form=>{const clearField=name=>{const field=form.elements[name];if(!field)return;const controls=field instanceof Element?[field]:Array.from(field);controls.forEach(control=>control.removeAttribute('aria-invalid'));const error=form.querySelector(`[data-error="${name}"]`);if(error)error.textContent=''};const handle=event=>{const target=event.target;if(!(target instanceof HTMLInputElement||target instanceof HTMLSelectElement||target instanceof HTMLTextAreaElement))return;const toast=document.querySelector('[data-message]');if(toast?.classList.contains('form-message--error'))hideFormMessage(toast);if(form.id!=='register-form'){if(target.value.trim())clearField(target.name);return}if(target.name==='password'||target.name==='confirm'){const password=form.elements.password.value,confirm=form.elements.confirm.value;if(password&&confirm&&password===confirm){clearField('password');clearField('confirm')}else if(target.name==='password'&&password)clearField('password');return}if(target.name==='bloodType'){if(target.value)clearField('bloodType');return}if(target.name==='city'){clearField('city');return}if(target.name==='role'){if(target.checked)clearField('role');return}if(target.value.trim())clearField(target.name)};form.addEventListener('input',handle);form.addEventListener('change',handle)};
-const errorBehaviorForm=$('#register-form')||$('#login-form')||$('#profile-form')||$('#request-form');if(errorBehaviorForm){ensureFieldErrors(errorBehaviorForm,errorBehaviorForm.id==='login-form'?['email','password']:errorBehaviorForm.id==='profile-form'?['firstName','email','phone','bloodType']:[]);prepareFormErrorBehavior(errorBehaviorForm)};
-const loginVisualValidation=$('#login-form');if(loginVisualValidation)loginVisualValidation.addEventListener('submit',()=>validate(loginVisualValidation,{email:value=>validEmail(value)?'':'Ingresá un email válido.',password:value=>value?'':'Ingresá tu contraseña.'}),true);
-const profileVisualValidation=$('#profile-form');if(profileVisualValidation)profileVisualValidation.addEventListener('submit',()=>validate(profileVisualValidation,{firstName:value=>clean(value)?'':'Ingresá tu nombre.',email:value=>validEmail(value)?'':'Ingresá un email válido.',phone:value=>validPhone(value)?'':'Ingresá un teléfono válido.'}),true);
-const BLOOD_GROUPS=['O+','O-','A+','A-','B+','B-','AB+','AB-'];const splitBlood=value=>{const normalized=clean(value).toUpperCase();if(!BLOOD_GROUPS.includes(normalized))throw new Error('Seleccioná tu grupo sanguíneo.');return{bloodType:normalized.slice(0,-1),rh:normalized.slice(-1)}};function fillSelects(){document.querySelectorAll('[data-blood]').forEach(s=>{if(s.options.length<2)BLOOD_GROUPS.forEach(v=>s.add(new Option(v,v)))})}fillSelects();
-function register(){const f=$('#register-form');if(!f)return;const donor=$('#donor-fields'),roles=f.querySelectorAll('input[name="role"]'),submit=f.querySelector('[type="submit"]'),cityAutocomplete=attachCityAutocomplete(f.elements.city,$('#city-suggestions'));const sync=()=>{donor.hidden=f.elements.role.value!=='donor'};roles.forEach(r=>r.addEventListener('change',sync));sync();f.addEventListener('submit',ev=>{ev.preventDefault();const v=values(f),rules={firstName:x=>clean(x)?'':'Ingresá tu nombre.',email:x=>validEmail(x)?'':'Ingresá un email válido.',password:x=>x?'':'Ingresá una contraseña.',confirm:x=>!x||x===v.password?'':'Las contraseñas no coinciden.',bloodType:x=>BLOOD_GROUPS.includes(clean(x).toUpperCase())?'':'Seleccioná tu grupo sanguíneo.',city:x=>cityAutocomplete.isValid()?'':'Seleccioná una localidad válida de las sugerencias.',role:x=>x?'':'Elegí un rol.'};if(!validate(f,rules)){const first=f.querySelector('[aria-invalid="true"]'),detail=f.querySelector('.field-error:not(:empty)')?.textContent||'Completá todos los campos obligatorios.';showFormMessage('No se pudo crear la cuenta',detail,'error');first?.focus();return}try{const blood=splitBlood(v.bloodType),user=createUser({firstName:clean(v.firstName),lastName:clean(v.lastName),email:clean(v.email).toLowerCase(),password:v.password,phone:clean(v.phone),bloodType:blood.bloodType,rh:blood.rh,city:clean(v.city),role:v.role,available:v.role==='donor'&&v.available==='on'});if(!getUser(user.id))return showFormMessage('No se pudo crear la cuenta','Ocurrió un problema al guardar tus datos. Intentá nuevamente.','error');submit.disabled=true;showFormMessage('Registro exitoso','Tu cuenta fue creada correctamente. Ya podés iniciar sesión.','success');setTimeout(()=>document.querySelector('[data-message]')?.classList.add('leaving'),2500);setTimeout(()=>{location.href='login.html'},2800)}catch(err){showFormMessage('No se pudo crear la cuenta',err.message||'Ocurrió un problema al guardar tus datos. Intentá nuevamente.','error')}})}
-function loginPage(){const f=$('#login-form');if(!f)return;const submit=f.querySelector('[type="submit"]');document.querySelectorAll('[data-password-toggle]').forEach(b=>b.addEventListener('click',()=>{const input=document.getElementById(b.dataset.passwordToggle),show=input.type==='password';input.type=show?'text':'password';b.textContent=show?'Ocultar':'Mostrar';b.setAttribute('aria-pressed',show)}));f.addEventListener('submit',ev=>{ev.preventDefault();const v=values(f);if(!validEmail(v.email)||!v.password)return showFormMessage('No pudimos iniciar sesión','Revisá tu email y contraseña e intentá nuevamente.','error');const user=login(clean(v.email),v.password);if(!user)return showFormMessage('No pudimos iniciar sesión','Revisá tu email y contraseña e intentá nuevamente.','error');const sessionUser=activeUser();if(!sessionUser||sessionUser.id!==user.id)return showFormMessage('No pudimos iniciar sesión','Ocurrió un problema al iniciar tu sesión. Intentá nuevamente.','error');submit.disabled=true;showFormMessage('Inicio de sesión exitoso','Bienvenido/a a RedVital.','success');setTimeout(()=>document.querySelector('[data-message]')?.classList.add('leaving'),2500);setTimeout(()=>{location.href=q.get('next')||'panel.html'},2800)})}
-function passwordRecovery(){const dialog=$('#recovery-dialog'),open=$('#forgot-password');if(!dialog||!open)return;const emailStep=$('#recovery-email-step'),passwordStep=$('#recovery-password-step'),emailForm=$('#recovery-email-form'),passwordForm=$('#recovery-password-form'),emailMessage=$('#recovery-email-message'),passwordMessage=$('#recovery-password-message');let recoveryUserId=null;const setRecoveryError=(target,text)=>{target.className='recovery-inline-message error';target.textContent=text};const clearRecoveryMessage=target=>{target.className='recovery-inline-message';target.textContent=''};const resetRecovery=()=>{emailForm.reset();passwordForm.reset();emailStep.hidden=false;passwordStep.hidden=true;recoveryUserId=null;clearRecoveryMessage(emailMessage);clearRecoveryMessage(passwordMessage)};open.addEventListener('click',()=>{resetRecovery();dialog.showModal();setTimeout(()=>emailForm.elements.email.focus(),0)});dialog.querySelectorAll('[data-recovery-close]').forEach(button=>button.addEventListener('click',()=>dialog.close()));emailForm.addEventListener('submit',event=>{event.preventDefault();clearRecoveryMessage(emailMessage);const email=clean(emailForm.elements.email.value).toLowerCase();if(!validEmail(email))return setRecoveryError(emailMessage,'Ingresá un email válido.');const user=getUsers().find(item=>clean(item.email).toLowerCase()===email);if(!user)return setRecoveryError(emailMessage,'No encontramos una cuenta asociada a ese email.');recoveryUserId=user.id;emailStep.hidden=true;passwordStep.hidden=false;passwordForm.elements.password.focus()});passwordForm.addEventListener('submit',event=>{event.preventDefault();clearRecoveryMessage(passwordMessage);const v=values(passwordForm);if(!validPassword(v.password))return setRecoveryError(passwordMessage,'Usá 8 caracteres, una mayúscula y un número.');if(v.password!==v.confirm)return setRecoveryError(passwordMessage,'Las contraseñas no coinciden.');try{updatePassword(recoveryUserId,v.password);const saved=getUser(recoveryUserId);if(!saved||saved.password!==v.password)return setRecoveryError(passwordMessage,'No se pudo actualizar la contraseña. Intentá nuevamente.');dialog.close();showFormMessage('Contraseña actualizada','Ya podés iniciar sesión con tu nueva contraseña.','success');const toast=document.querySelector('[data-message]');setTimeout(()=>toast?.classList.add('leaving'),2200);setTimeout(()=>{if(toast)toast.className='form-message';$('#login-form').elements.email.focus()},2500)}catch{return setRecoveryError(passwordMessage,'No se pudo actualizar la contraseña. Intentá nuevamente.')}})}
-function panel(){const u=requireAuth();if(!u)return;const donor=u.role==='donor',area=$('#dashboard-content'),hero=$('#dashboard-hero');$('#welcome').textContent=`Hola, ${u.firstName}`;$('#role-label').textContent=donor?'DONANTE':'PACIENTE / RESPONSABLE';$('#dashboard-kicker').textContent=donor?'Tu espacio de donación':'Tu espacio de solicitudes';$('#dashboard-description').textContent=donor?'Encontrá solicitudes compatibles y mantené actualizada tu disponibilidad para ayudar.':'Creá, administrá y seguí el estado de tus solicitudes de sangre.';area.className=`container dashboard dashboard--${donor?'donor':'patient'}`;hero.classList.add(donor?'dashboard--donor-hero':'dashboard--patient-hero');if(donor){const matches=compatibleRequests(u);area.innerHTML=`<article class="card donor-availability ${u.available?'is-available':'is-unavailable'}"><div class="donor-availability-copy"><span class="dashboard-icon" aria-hidden="true">✓</span><div><span class="eyebrow">Disponibilidad</span><h2>${u.available?'Disponible para donar':'No disponible actualmente'}</h2><p>${u.available?'Estás visible como donante disponible.':'Podés actualizar tu estado cuando vuelvas a estar disponible.'}</p></div></div><div class="dashboard-actions"><a class="btn btn-outline" href="perfil.html">Cambiar disponibilidad</a></div></article><div class="donor-details"><article class="card dashboard-stat"><span class="dashboard-icon" aria-hidden="true">◆</span><div><span>Grupo sanguíneo</span><strong>${u.bloodType}${u.rh}</strong></div></article><article class="card dashboard-stat"><span class="dashboard-icon" aria-hidden="true">⌖</span><div><span>Localidad</span><strong>${escapeText(u.city)}</strong></div></article></div><section class="dashboard-section"><div class="dashboard-head"><div><h2>Solicitudes compatibles</h2><p>Casos que podrían coincidir con tu grupo sanguíneo y localidad.</p><p class="help">${compatibilityNotice}</p></div><div class="dashboard-actions"><a class="btn btn-primary" href="solicitudes.html">Ver solicitudes compatibles</a><a class="btn btn-outline" href="perfil.html">Editar perfil</a></div></div><div id="matches" class="grid grid-2"></div></section>`;const list=$('#matches');matches.slice(0,4).forEach(r=>list.append(requestCard(r,[action('Ver detalle',`detalle-solicitud.html?id=${r.id}`,'outline')])));if(!matches.length)list.innerHTML='<div class="empty-state"><h3>No hay solicitudes compatibles disponibles.</h3><p>Podés volver a consultar más tarde o revisar otras localidades.</p></div>'}else{const mine=getRequests().filter(r=>r.ownerId===u.id),active=mine.filter(r=>r.status==='active').length,resolved=mine.filter(r=>r.status==='resolved').length;area.innerHTML=`<div class="patient-summary"><article class="card dashboard-stat dashboard-stat--primary dashboard-stat--active"><span class="dashboard-icon" aria-hidden="true">!</span><div><span>Solicitudes activas</span><strong>${active}</strong></div></article><article class="card dashboard-stat dashboard-stat--resolved"><span class="dashboard-icon" aria-hidden="true">✓</span><div><span>Solicitudes resueltas</span><strong>${resolved}</strong></div></article><article class="card dashboard-stat dashboard-stat--total"><span class="dashboard-icon" aria-hidden="true">▤</span><div><span>Total publicadas</span><strong>${mine.length}</strong></div></article></div><article class="card patient-cta"><div><h2>Nueva solicitud</h2><p>Publicá los datos necesarios para encontrar donantes.</p></div><a class="btn" href="nueva-solicitud.html">+ Nueva solicitud</a></article><div class="patient-paths"><article class="card path-card"><h2><span class="dashboard-icon" aria-hidden="true">●</span>Mis solicitudes activas</h2><p>Revisá y administrá las solicitudes que todavía están abiertas.</p><a class="btn btn-primary" href="mis-solicitudes.html">Ver solicitudes activas</a></article><article class="card path-card"><h2><span class="dashboard-icon" aria-hidden="true">✓</span>Solicitudes resueltas</h2><p>Consultá las solicitudes completadas que forman parte de tu historial.</p><a class="btn btn-outline" href="mis-solicitudes.html">Ver solicitudes resueltas</a></article></div>`}}
-function profile(){
- const u=requireAuth();if(!u)return;
- $('#profile-summary').innerHTML=`<div class="avatar">${initials(u)}</div><div><h1>${escapeText(u.firstName)} ${escapeText(u.lastName)}</h1><p>${u.role==='donor'?'Donante':'Paciente / Responsable'} · ${u.bloodType}${u.rh}</p></div>`;
- const f=$('#profile-form');
- ['firstName','lastName','email','phone','city'].forEach(k=>f.elements[k].value=u[k]||'');
- f.elements.bloodType.value=`${u.bloodType}${u.rh}`;
- const profileCity=attachCityAutocomplete(f.elements.city,$('#profile-city-suggestions')),avail=$('#availability-field'),participationLabel=avail.querySelector('strong'),participationHelp=avail.querySelector('.help');
- avail.hidden=false;
- f.elements.available.checked=!!u.available;
- participationLabel.textContent=u.role==='donor'?'Estoy dispuesto para donar':'Estoy dispuesto a recibir donaciones';
- participationHelp.textContent=u.role==='donor'?'Tu disponibilidad informa tu intención actual de donar. La aptitud definitiva debe ser evaluada por el centro de salud.':'Este estado informa tu disposición actual para recibir donaciones.';
- f.addEventListener('submit',ev=>{
-  ev.preventDefault();const v=values(f);
-  if(!validEmail(v.email)||!validPhone(v.phone)||!clean(v.firstName))return showMessage('Revisá los datos del perfil.','error');
-  const cityError=f.querySelector('[data-error="city"]');
-  if(!profileCity.isValid()){cityError.textContent='Seleccioná una localidad válida de las sugerencias.';f.elements.city.setAttribute('aria-invalid','true');f.elements.city.focus();return showMessage('Seleccioná una localidad válida de las sugerencias.','error')}
-  cityError.textContent='';f.elements.city.removeAttribute('aria-invalid');
-  const blood=splitBlood(v.bloodType),save=()=>{updateUser(u.id,{firstName:clean(v.firstName),lastName:clean(v.lastName),email:clean(v.email),phone:clean(v.phone),bloodType:blood.bloodType,rh:blood.rh,city:clean(v.city),available:v.available==='on'});setFlash('Perfil actualizado.');location.reload()};
-  if(blood.bloodType!==u.bloodType||blood.rh!==u.rh)confirmDialog('Confirmar grupo sanguíneo','Este dato influye en las coincidencias orientativas. ¿Confirmás el cambio?',save);else save()
- })
+import { seedDemo, setFlash, resetDemo } from "./storage.js";
+import {
+  renderShell,
+  showMessage,
+  showFormMessage,
+  hideFormMessage,
+  requestCard,
+  action,
+  initials,
+  confirmDialog,
+  escapeText,
+  formatDate,
+} from "./ui.js";
+import { activeUser, login, requireAuth } from "./auth.js";
+import {
+  createUser,
+  getUser,
+  getUsers,
+  updateUser,
+  updatePassword,
+} from "./users.js";
+import {
+  createRequest,
+  getRequests,
+  getRequest,
+  updateRequest,
+  resolveRequest,
+  activeRequests,
+  compatibleRequests,
+  setRequestStatus,
+} from "./requests.js";
+import {
+  validEmail,
+  validPassword,
+  validPhone,
+  values,
+  validate,
+  clean,
+  formatPersonName,
+} from "./validation.js";
+import { compatibilityNotice, isCompatible } from "./compatibility.js";
+import { CITIES, normalizeCity, attachCityAutocomplete } from "./cities.js";
+import { priorityBadge } from "./priorities.js";
+import { loadCurrentUser } from "./auth.js";
+import { initWebApiAuth } from "./web-auth.js?v=api-auth-v1";
+import "./web-session.js";
+import { apiFetch, apiJson } from "./api.js";
+const page = document.body.dataset.page;
+const apiAuthMode = document.body.dataset.authMode === "api" ||
+  ["nueva", "editar", "mis-solicitudes", "solicitudes", "detalle"].includes(page);
+seedDemo();
+if (!apiAuthMode) await loadCurrentUser().catch(() => null);
+const q = new URLSearchParams(location.search);
+const $ = (s) => document.querySelector(s);
+if (
+  !apiAuthMode &&
+  (page === "panel" || page === "perfil") &&
+  activeUser()?.role === "admin"
+)
+  location.replace("admin.html");
+if (page === "perfil") {
+  const participationStyles = document.createElement("link");
+  participationStyles.rel = "stylesheet";
+  participationStyles.href = "css/participation.css";
+  document.head.append(participationStyles);
 }
-function requestForm(edit=false){const u=requireAuth('patient');if(!u)return;const f=$('#request-form');let existing=null;if(edit){existing=getRequest(q.get('id'));if(!existing||existing.ownerId!==u.id){showMessage('No tenés permiso para editar esta solicitud.','error');f.hidden=true;return}['hospital','city','urgency','phone','email','description'].forEach(k=>f.elements[k].value=existing[k]||'');f.elements.bloodType.value=`${existing.bloodType}${existing.rh}`}else{f.elements.city.value=u.city||'';f.elements.phone.value=u.phone||'';f.elements.email.value=u.email||''}f.addEventListener('submit',ev=>{ev.preventDefault();const v=values(f),rules={bloodType:x=>x?'':'Elegí un grupo.',hospital:x=>clean(x)?'':'Ingresá el centro de salud.',city:x=>clean(x)?'':'Ingresá la localidad.',urgency:x=>x?'':'Elegí la urgencia.',phone:x=>validPhone(x)?'':'Ingresá un teléfono válido.',email:x=>validEmail(x)?'':'Ingresá un email válido.',description:x=>clean(x).length>=10?'':'Escribí al menos 10 caracteres.'};if(!validate(f,rules))return showMessage('Revisá los campos señalados.','error');const blood=splitBlood(v.bloodType),data={bloodType:blood.bloodType,rh:blood.rh,hospital:clean(v.hospital),city:clean(v.city),urgency:v.urgency,phone:clean(v.phone),email:clean(v.email),description:clean(v.description)};edit?updateRequest(existing.id,u.id,data):createRequest(data,u.id);setFlash(edit?'Solicitud actualizada.':'Solicitud publicada.');location.href='mis-solicitudes.html'})}
-function myRequests(){const u=requireAuth('patient');if(!u)return;const all=getRequests().filter(r=>r.ownerId===u.id);function draw(status,target){const box=$(target),rows=all.filter(r=>r.status===status);if(!rows.length){box.innerHTML=status==='active'?'<div class="empty-state"><h3>Todavía no publicaste solicitudes activas.</h3><p>Creá una solicitud para empezar a conectar.</p><a class="btn btn-primary" href="nueva-solicitud.html">Crear mi primera solicitud</a></div>':'<div class="empty-state"><h3>No hay solicitudes resueltas.</h3><p>Cuando cierres una solicitud seguirá disponible acá como historial.</p></div>';return}rows.forEach(r=>{const acts=[action('Ver',`detalle-solicitud.html?id=${r.id}`)];if(status==='active'){acts.push(action('Editar',`editar-solicitud.html?id=${r.id}`));const b=document.createElement('button');b.className='btn btn-danger';b.textContent='Marcar solicitud como resuelta';b.onclick=()=>confirmDialog('Marcar solicitud como resuelta','La solicitud dejará de mostrarse entre las activas y quedará en tu historial.',()=>{resolveRequest(r.id,u.id);setFlash('Solicitud marcada como resuelta.');location.reload()});acts.push(b)}box.append(requestCard(r,acts))})}draw('active','#active-list');draw('resolved','#resolved-list')}
-function donorRequests(){const u=requireAuth('donor');if(!u)return;const all=compatibleRequests(u),blood=$('#filter-blood'),city=$('#filter-city'),cityList=$('#filter-city-suggestions'),urgency=$('#filter-urgency');let selectedCity='';function draw(){const rows=all.filter(r=>(!blood.value||`${r.bloodType}${r.rh}`===blood.value)&&(!selectedCity||normalizeCity(r.city)===normalizeCity(selectedCity))&&(!urgency.value||r.urgency===urgency.value));$('#results-count').textContent=`${rows.length} ${rows.length===1?'solicitud compatible':'solicitudes compatibles'}`;const list=$('#request-list');list.replaceChildren();if(!rows.length)return list.innerHTML='<div class="empty-state"><h3>No hay solicitudes compatibles con estos filtros.</h3><p>Probá con una combinación diferente o volvé a consultar más tarde.</p></div>';rows.forEach(r=>list.append(requestCard(r,[action('Ver detalle',`detalle-solicitud.html?id=${r.id}`,'primary')])))}const cityAutocomplete=attachCityAutocomplete(city,cityList,{catalog:[...CITIES,...all.map(r=>r.city)],maxResults:10,onSelect:value=>{selectedCity=value;draw()},onInput:value=>{selectedCity='';if(!value.trim())draw()}});[blood,urgency].forEach(control=>control.addEventListener('change',draw));$('#clear-filters').onclick=()=>{blood.value='';urgency.value='';selectedCity='';cityAutocomplete.clear();draw()};$('#compatible-only').hidden=false;draw()}
-function detail(){const u=requireAuth(['donor','patient','admin']);if(!u)return;const r=getRequest(q.get('id')),canAccess=r&&(u.role==='admin'||(u.role==='patient'&&r.ownerId===u.id)||(u.role==='donor'&&compatibleRequests(u).some(item=>item.id===r.id)));if(!canAccess){location.replace(u.role==='donor'?'solicitudes.html':u.role==='patient'?'mis-solicitudes.html':'admin.html');return}$('#detail').append(requestCard(r));$('#detail-meta').innerHTML=`<div class="grid grid-2"><article class="card"><h2>Datos de la solicitud</h2><p><strong>Grupo:</strong> ${r.bloodType}${r.rh}</p><p><strong>Centro:</strong> ${escapeText(r.hospital)}</p><p><strong>Localidad:</strong> ${escapeText(r.city)}</p><p><strong>Prioridad:</strong> ${priorityBadge(r.urgency)}</p><p><strong>Fecha:</strong> ${formatDate(r.createdAt)}</p><p><strong>Estado:</strong> ${r.status==='active'?'Activa':'Resuelta'}</p></article><article class="card"><h2>Contacto autorizado</h2><p>Usá estos canales únicamente para coordinar con el responsable y el centro de salud.</p><div class="button-row"><a class="btn btn-primary" target="_blank" rel="noopener" href="https://wa.me/${r.phone.replace(/\D/g,'')}?text=${encodeURIComponent('Hola, vi la solicitud publicada en RedVital y quería comunicarme para consultar cómo colaborar con la donación.')}">Contactar por WhatsApp</a><a class="btn btn-outline" href="mailto:${encodeURIComponent(r.email)}?subject=${encodeURIComponent('Consulta sobre solicitud en RedVital')}&body=${encodeURIComponent('Hola, vi la solicitud publicada en RedVital y quería consultar cómo colaborar con la donación.')}">Enviar correo</a></div></article></div>`}
-function admin(){const u=requireAuth('admin');if(!u)return;const users=getUsers(),requests=getRequests(),userList=$('#admin-users'),requestList=$('#admin-requests');$('#admin-welcome').textContent=`Administración de RedVital · ${u.firstName}`;users.filter(item=>item.id!==u.id).forEach(item=>{const card=document.createElement('article');card.className='card';card.innerHTML=`<h3>${escapeText(item.firstName)} ${escapeText(item.lastName)}</h3><p>${item.role==='donor'?'Donante':'Paciente'} · ${escapeText(item.email)}</p><p>${item.bloodType}${item.rh} · ${escapeText(item.city)}</p>`;if(item.role==='donor'){const button=document.createElement('button');button.className='btn btn-outline';button.textContent=item.available?'Desactivar disponibilidad':'Activar disponibilidad';button.onclick=()=>{updateUser(item.id,{available:!item.available});location.reload()};card.append(button)}userList.append(card)});requests.forEach(r=>{const button=document.createElement('button');button.className='btn btn-outline';button.textContent=r.status==='active'?'Marcar resuelta':'Reactivar';button.onclick=()=>{setRequestStatus(r.id,r.status==='active'?'resolved':'active');location.reload()};requestList.append(requestCard(r,[action('Ver detalle',`detalle-solicitud.html?id=${r.id}`),button]))})}
-function reset(){const b=$('#reset-demo');if(b)b.onclick=()=>confirmDialog('Restablecer datos demo','Se eliminarán los datos guardados en este navegador y volverán los ejemplos iniciales.',()=>{resetDemo();location.reload()})}
-document.querySelectorAll('#register-form,#profile-form,#request-form').forEach(form=>{const locations=setupLocationFields(form);if(!locations)return;form.addEventListener('submit',event=>{if(!locations.province.isValid()){event.preventDefault();event.stopImmediatePropagation();const error=form.querySelector('[data-error="province"]');if(error)error.textContent='Seleccioná una provincia válida de las sugerencias.';form.elements.province.focus();return}if(!locations.city.isValid()){event.preventDefault();event.stopImmediatePropagation();const error=form.querySelector('[data-error="city"]');if(error)error.textContent='Seleccioná una localidad válida de las sugerencias.';form.elements.city.focus()}},true)});register();loginPage();passwordRecovery();if(page==='panel')panel();if(page==='perfil')profile();if(page==='nueva')requestForm();if(page==='editar')requestForm(true);if(page==='mis-solicitudes')myRequests();if(page==='solicitudes')donorRequests();if(page==='detalle')detail();if(page==='admin')admin();reset();
+queueMicrotask(() => {
+  if (apiAuthMode) return;
+  const form = document.querySelector("#register-form"),
+    donorFields = document.querySelector("#donor-fields");
+  if (!form || !donorFields) return;
+  const available = form.elements.available,
+    label = donorFields.querySelector(".availability-copy strong"),
+    help = donorFields.querySelector(".availability-copy .help"),
+    error = document.createElement("span");
+  error.id = "available-error";
+  error.className = "field-error";
+  error.dataset.error = "available";
+  available.setAttribute("aria-describedby", error.id);
+  donorFields.append(error);
+  const clearAvailabilityError = () => {
+    available.removeAttribute("aria-invalid");
+    error.textContent = "";
+  };
+  available.addEventListener("change", () => {
+    if (available.checked) clearAvailabilityError();
+  });
+  const syncParticipationConfirmation = () => {
+    const role = form.elements.role.value,
+      hasRole = role === "donor" || role === "patient";
+    donorFields.hidden = !hasRole;
+    donorFields.classList.toggle("hidden", !hasRole);
+    available.checked = false;
+    clearAvailabilityError();
+    if (role === "donor") {
+      label.textContent = "Estoy dispuesto para donar";
+      help.textContent =
+        "La aptitud definitiva debe ser evaluada por el centro de salud.";
+    } else if (role === "patient") {
+      label.textContent = "Estoy dispuesto a recibir donaciones";
+      help.textContent =
+        "La solicitud deberá coordinarse con el centro de salud correspondiente.";
+    }
+  };
+  form
+    .querySelectorAll('input[name="role"]')
+    .forEach((role) =>
+      role.addEventListener("change", syncParticipationConfirmation),
+    );
+  syncParticipationConfirmation();
+  form.addEventListener(
+    "submit",
+    (event) => {
+      const role = form.elements.role.value;
+      if ((role !== "donor" && role !== "patient") || available.checked) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      available.setAttribute("aria-invalid", "true");
+      error.textContent =
+        role === "donor"
+          ? "Debés confirmar que estás dispuesto a donar para registrarte como donante."
+          : "Debés confirmar que estás dispuesto a recibir donaciones para continuar.";
+      available.focus();
+    },
+    true,
+  );
+});
+queueMicrotask(() => {
+  if (apiAuthMode) return;
+  if (page !== "panel") return;
+  const user = activeUser(),
+    area = $("#dashboard-content");
+  if (!user || !area) return;
+  const text =
+    user.role === "donor"
+      ? "Estoy dispuesto para donar"
+      : "Estoy dispuesto a recibir donaciones";
+  let state = area.querySelector(".donor-availability");
+  if (user.role === "patient") {
+    state = document.createElement("article");
+    state.className = `card donor-availability participation-state ${user.available ? "is-available" : "is-unavailable"}`;
+    state.innerHTML = `<div class="donor-availability-copy"><span class="dashboard-icon" aria-hidden="true">✓</span><div><span class="eyebrow">Participación</span><h2>${text}</h2><p>${user.available ? "Estado activo." : "Estado desactivado."}</p></div></div><div class="dashboard-actions"><a class="btn btn-outline" href="perfil.html">Cambiar participación</a></div>`;
+    area.prepend(state);
+  } else {
+    state?.classList.add("participation-state");
+    const heading = state?.querySelector("h2");
+    if (heading) heading.textContent = text;
+  }
+  state?.setAttribute("data-participation-role", user.role);
+});
+const preparePersonNameFields = (form) => {
+  const inputs = ["firstName", "lastName"]
+      .map((name) => form.elements[name])
+      .filter(Boolean),
+    normalize = () =>
+      inputs.forEach((input) => {
+        input.value = formatPersonName(input.value);
+      });
+  inputs.forEach((input) => {
+    input.setAttribute("autocapitalize", "words");
+    input.addEventListener("blur", () => {
+      input.value = formatPersonName(input.value);
+    });
+  });
+  form.addEventListener("submit", normalize);
+  queueMicrotask(() => {
+    normalize();
+    const heading = $("#profile-summary h1");
+    if (heading)
+      heading.textContent = inputs
+        .map((input) => input.value)
+        .filter(Boolean)
+        .join(" ");
+  });
+};
+const personNameForm = apiAuthMode
+  ? null
+  : $("#register-form") || $("#profile-form");
+if (personNameForm) preparePersonNameFields(personNameForm);
+const setupLocationFields = (form) => {
+  if (!form?.elements.city) return null;
+  const cityInput = form.elements.city,
+    cityField = cityInput.closest(".field");
+  let provinceInput = form.elements.province;
+  if (!provinceInput) {
+    const field = document.createElement("div");
+    field.className = "field";
+    field.innerHTML =
+      '<label for="province">Provincia</label><div class="city-autocomplete"><input id="province" name="province" type="text" autocomplete="off" aria-controls="province-suggestions"><div id="province-suggestions" class="city-suggestions" role="listbox" hidden></div></div><span class="field-error" data-error="province"></span>';
+    cityField.before(field);
+    provinceInput = field.querySelector("input");
+  }
+  const provinceList = provinceInput
+      .closest(".city-autocomplete")
+      .querySelector(".city-suggestions"),
+    cityList = cityInput
+      .closest(".city-autocomplete")
+      ?.querySelector(".city-suggestions");
+  let cityAutocomplete,
+    provinceAutocomplete = attachProvinceAutocomplete(
+      provinceInput,
+      provinceList,
+      {
+        onSelect: (value) => {
+          cityAutocomplete?.clear();
+          cityAutocomplete?.setProvince(value);
+        },
+        onInput: () => {
+          cityAutocomplete?.clear();
+        },
+      },
+    );
+  cityAutocomplete = attachCityAutocomplete(cityInput, cityList, {
+    province: () => provinceInput.value,
+    onSelect: (value, location) => {
+      if (!provinceAutocomplete.isValid()) {
+        provinceInput.value = location.province;
+        provinceAutocomplete.setValue(location.province);
+      }
+    },
+  });
+  if (!provinceInput.value && cityInput.value) {
+    const province = findLocationProvince(cityInput.value);
+    if (province) {
+      provinceInput.value = province;
+      provinceAutocomplete.setValue(province);
+      cityAutocomplete.setProvince(province);
+    }
+  }
+  return { province: provinceAutocomplete, city: cityAutocomplete };
+};
+const ensureFieldErrors = (form, names) =>
+  names.forEach((name) => {
+    if (form.querySelector(`[data-error="${name}"]`)) return;
+    const control = form.elements[name],
+      field = control?.closest(".field");
+    if (!field) return;
+    const error = document.createElement("span");
+    error.className = "field-error";
+    error.dataset.error = name;
+    field.append(error);
+  });
+const prepareFormErrorBehavior = (form) => {
+  const clearField = (name) => {
+    const field = form.elements[name];
+    if (!field) return;
+    const controls = field instanceof Element ? [field] : Array.from(field);
+    controls.forEach((control) => control.removeAttribute("aria-invalid"));
+    const error = form.querySelector(`[data-error="${name}"]`);
+    if (error) error.textContent = "";
+  };
+  const handle = (event) => {
+    const target = event.target;
+    if (!(
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLSelectElement ||
+      target instanceof HTMLTextAreaElement
+    ))
+      return;
+    const toast = document.querySelector("[data-message]");
+    if (toast?.classList.contains("form-message--error"))
+      hideFormMessage(toast);
+    if (form.id !== "register-form") {
+      if (target.value.trim()) clearField(target.name);
+      return;
+    }
+    if (target.name === "password" || target.name === "confirm") {
+      const password = form.elements.password.value,
+        confirm = form.elements.confirm.value;
+      if (password && confirm && password === confirm) {
+        clearField("password");
+        clearField("confirm");
+      } else if (target.name === "password" && password) clearField("password");
+      return;
+    }
+    if (target.name === "bloodType") {
+      if (target.value) clearField("bloodType");
+      return;
+    }
+    if (target.name === "city") {
+      clearField("city");
+      return;
+    }
+    if (target.name === "role") {
+      if (target.checked) clearField("role");
+      return;
+    }
+    if (target.value.trim()) clearField(target.name);
+  };
+  form.addEventListener("input", handle);
+  form.addEventListener("change", handle);
+};
+const errorBehaviorForm =
+  $("#register-form") ||
+  $("#login-form") ||
+  $("#profile-form") ||
+  $("#request-form");
+if (errorBehaviorForm) {
+  ensureFieldErrors(
+    errorBehaviorForm,
+    errorBehaviorForm.id === "login-form"
+      ? ["email", "password"]
+      : errorBehaviorForm.id === "profile-form"
+        ? ["firstName", "email", "phone", "bloodType"]
+        : [],
+  );
+  prepareFormErrorBehavior(errorBehaviorForm);
+}
+const loginVisualValidation = apiAuthMode ? null : $("#login-form");
+if (loginVisualValidation)
+  loginVisualValidation.addEventListener(
+    "submit",
+    () =>
+      validate(loginVisualValidation, {
+        email: (value) => (validEmail(value) ? "" : "Ingresá un email válido."),
+        password: (value) => (value ? "" : "Ingresá tu contraseña."),
+      }),
+    true,
+  );
+const profileVisualValidation = apiAuthMode ? null : $("#profile-form");
+if (profileVisualValidation)
+  profileVisualValidation.addEventListener(
+    "submit",
+    () =>
+      validate(profileVisualValidation, {
+        firstName: (value) => (clean(value) ? "" : "Ingresá tu nombre."),
+        email: (value) => (validEmail(value) ? "" : "Ingresá un email válido."),
+        phone: (value) =>
+          validPhone(value) ? "" : "Ingresá un teléfono válido.",
+      }),
+    true,
+  );
+const BLOOD_GROUPS = ["O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-"];
+const splitBlood = (value) => {
+  const normalized = clean(value).toUpperCase();
+  if (!BLOOD_GROUPS.includes(normalized))
+    throw new Error("Seleccioná tu grupo sanguíneo.");
+  return { bloodType: normalized.slice(0, -1), rh: normalized.slice(-1) };
+};
+function fillSelects() {
+  document.querySelectorAll("[data-blood]").forEach((s) => {
+    if (s.options.length < 2)
+      BLOOD_GROUPS.forEach((v) => s.add(new Option(v, v)));
+  });
+}
+fillSelects();
+function register() {
+  if (window.__REDVITAL_API_AUTH) return;
+  const f = $("#register-form");
+  if (!f) return;
+  const donor = $("#donor-fields"),
+    roles = f.querySelectorAll('input[name="role"]'),
+    submit = f.querySelector('[type="submit"]'),
+    cityAutocomplete = attachCityAutocomplete(
+      f.elements.city,
+      $("#city-suggestions"),
+    );
+  const sync = () => {
+    donor.hidden = f.elements.role.value !== "donor";
+  };
+  roles.forEach((r) => r.addEventListener("change", sync));
+  sync();
+  f.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const v = values(f),
+      rules = {
+        firstName: (x) => (clean(x) ? "" : "Ingresá tu nombre."),
+        email: (x) => (validEmail(x) ? "" : "Ingresá un email válido."),
+        password: (x) => (x ? "" : "Ingresá una contraseña."),
+        confirm: (x) =>
+          !x || x === v.password ? "" : "Las contraseñas no coinciden.",
+        bloodType: (x) =>
+          BLOOD_GROUPS.includes(clean(x).toUpperCase())
+            ? ""
+            : "Seleccioná tu grupo sanguíneo.",
+        city: (x) =>
+          cityAutocomplete.isValid()
+            ? ""
+            : "Seleccioná una localidad válida de las sugerencias.",
+        role: (x) => (x ? "" : "Elegí un rol."),
+      };
+    if (!validate(f, rules)) {
+      const first = f.querySelector('[aria-invalid="true"]'),
+        detail =
+          f.querySelector(".field-error:not(:empty)")?.textContent ||
+          "Completá todos los campos obligatorios.";
+      showFormMessage("No se pudo crear la cuenta", detail, "error");
+      first?.focus();
+      return;
+    }
+    try {
+      const blood = splitBlood(v.bloodType),
+        user = createUser({
+          firstName: clean(v.firstName),
+          lastName: clean(v.lastName),
+          email: clean(v.email).toLowerCase(),
+          password: v.password,
+          phone: clean(v.phone),
+          bloodType: blood.bloodType,
+          rh: blood.rh,
+          city: clean(v.city),
+          role: v.role,
+          available: v.role === "donor" && v.available === "on",
+        });
+      if (!getUser(user.id))
+        return showFormMessage(
+          "No se pudo crear la cuenta",
+          "Ocurrió un problema al guardar tus datos. Intentá nuevamente.",
+          "error",
+        );
+      submit.disabled = true;
+      showFormMessage(
+        "Registro exitoso",
+        "Tu cuenta fue creada correctamente. Ya podés iniciar sesión.",
+        "success",
+      );
+      setTimeout(
+        () =>
+          document.querySelector("[data-message]")?.classList.add("leaving"),
+        2500,
+      );
+      setTimeout(() => {
+        location.href = "login.html";
+      }, 2800);
+    } catch (err) {
+      showFormMessage(
+        "No se pudo crear la cuenta",
+        err.message ||
+          "Ocurrió un problema al guardar tus datos. Intentá nuevamente.",
+        "error",
+      );
+    }
+  });
+}
+function loginPage() {
+  const f = $("#login-form");
+  if (!f) return;
+  const submit = f.querySelector('[type="submit"]');
+  document.querySelectorAll("[data-password-toggle]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const input = document.getElementById(b.dataset.passwordToggle),
+        show = input.type === "password";
+      input.type = show ? "text" : "password";
+      b.textContent = show ? "Ocultar" : "Mostrar";
+      b.setAttribute("aria-pressed", show);
+    }),
+  );
+  f.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const v = values(f);
+    if (!validEmail(v.email) || !v.password)
+      return showFormMessage(
+        "No pudimos iniciar sesión",
+        "Revisá tu email y contraseña e intentá nuevamente.",
+        "error",
+      );
+    const user = login(clean(v.email), v.password);
+    if (!user)
+      return showFormMessage(
+        "No pudimos iniciar sesión",
+        "Revisá tu email y contraseña e intentá nuevamente.",
+        "error",
+      );
+    const sessionUser = activeUser();
+    if (!sessionUser || sessionUser.id !== user.id)
+      return showFormMessage(
+        "No pudimos iniciar sesión",
+        "Ocurrió un problema al iniciar tu sesión. Intentá nuevamente.",
+        "error",
+      );
+    submit.disabled = true;
+    showFormMessage(
+      "Inicio de sesión exitoso",
+      "Bienvenido/a a RedVital.",
+      "success",
+    );
+    setTimeout(
+      () => document.querySelector("[data-message]")?.classList.add("leaving"),
+      2500,
+    );
+    setTimeout(() => {
+      location.href = q.get("next") || "panel.html";
+    }, 2800);
+  });
+}
+function passwordRecovery() {
+  const dialog = $("#recovery-dialog"),
+    open = $("#forgot-password");
+  if (!dialog || !open) return;
+  const emailStep = $("#recovery-email-step"),
+    passwordStep = $("#recovery-password-step"),
+    emailForm = $("#recovery-email-form"),
+    passwordForm = $("#recovery-password-form"),
+    emailMessage = $("#recovery-email-message"),
+    passwordMessage = $("#recovery-password-message");
+  let recoveryUserId = null;
+  const setRecoveryError = (target, text) => {
+    target.className = "recovery-inline-message error";
+    target.textContent = text;
+  };
+  const clearRecoveryMessage = (target) => {
+    target.className = "recovery-inline-message";
+    target.textContent = "";
+  };
+  const resetRecovery = () => {
+    emailForm.reset();
+    passwordForm.reset();
+    emailStep.hidden = false;
+    passwordStep.hidden = true;
+    recoveryUserId = null;
+    clearRecoveryMessage(emailMessage);
+    clearRecoveryMessage(passwordMessage);
+  };
+  open.addEventListener("click", () => {
+    resetRecovery();
+    dialog.showModal();
+    setTimeout(() => emailForm.elements.email.focus(), 0);
+  });
+  dialog
+    .querySelectorAll("[data-recovery-close]")
+    .forEach((button) =>
+      button.addEventListener("click", () => dialog.close()),
+    );
+  emailForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    clearRecoveryMessage(emailMessage);
+    const email = clean(emailForm.elements.email.value).toLowerCase();
+    if (!validEmail(email))
+      return setRecoveryError(emailMessage, "Ingresá un email válido.");
+    const user = getUsers().find(
+      (item) => clean(item.email).toLowerCase() === email,
+    );
+    if (!user)
+      return setRecoveryError(
+        emailMessage,
+        "No encontramos una cuenta asociada a ese email.",
+      );
+    recoveryUserId = user.id;
+    emailStep.hidden = true;
+    passwordStep.hidden = false;
+    passwordForm.elements.password.focus();
+  });
+  passwordForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    clearRecoveryMessage(passwordMessage);
+    const v = values(passwordForm);
+    if (!validPassword(v.password))
+      return setRecoveryError(
+        passwordMessage,
+        "Usá 8 caracteres, una mayúscula y un número.",
+      );
+    if (v.password !== v.confirm)
+      return setRecoveryError(passwordMessage, "Las contraseñas no coinciden.");
+    try {
+      updatePassword(recoveryUserId, v.password);
+      const saved = getUser(recoveryUserId);
+      if (!saved || saved.password !== v.password)
+        return setRecoveryError(
+          passwordMessage,
+          "No se pudo actualizar la contraseña. Intentá nuevamente.",
+        );
+      dialog.close();
+      showFormMessage(
+        "Contraseña actualizada",
+        "Ya podés iniciar sesión con tu nueva contraseña.",
+        "success",
+      );
+      const toast = document.querySelector("[data-message]");
+      setTimeout(() => toast?.classList.add("leaving"), 2200);
+      setTimeout(() => {
+        if (toast) toast.className = "form-message";
+        $("#login-form").elements.email.focus();
+      }, 2500);
+    } catch {
+      return setRecoveryError(
+        passwordMessage,
+        "No se pudo actualizar la contraseña. Intentá nuevamente.",
+      );
+    }
+  });
+}
+function panel() {
+  const u = requireAuth();
+  if (!u) return;
+  const donor = u.role === "donor",
+    area = $("#dashboard-content"),
+    hero = $("#dashboard-hero");
+  $("#welcome").textContent = `Hola, ${u.firstName}`;
+  $("#role-label").textContent = donor ? "DONANTE" : "PACIENTE / RESPONSABLE";
+  $("#dashboard-kicker").textContent = donor
+    ? "Tu espacio de donación"
+    : "Tu espacio de solicitudes";
+  $("#dashboard-description").textContent = donor
+    ? "Encontrá solicitudes compatibles y mantené actualizada tu disponibilidad para ayudar."
+    : "Creá, administrá y seguí el estado de tus solicitudes de sangre.";
+  area.className = `container dashboard dashboard--${donor ? "donor" : "patient"}`;
+  hero.classList.add(
+    donor ? "dashboard--donor-hero" : "dashboard--patient-hero",
+  );
+  if (donor) {
+    const matches = compatibleRequests(u);
+    area.innerHTML = `<article class="card donor-availability ${u.available ? "is-available" : "is-unavailable"}"><div class="donor-availability-copy"><span class="dashboard-icon" aria-hidden="true">✓</span><div><span class="eyebrow">Disponibilidad</span><h2>${u.available ? "Disponible para donar" : "No disponible actualmente"}</h2><p>${u.available ? "Estás visible como donante disponible." : "Podés actualizar tu estado cuando vuelvas a estar disponible."}</p></div></div><div class="dashboard-actions"><a class="btn btn-outline" href="perfil.html">Cambiar disponibilidad</a></div></article><div class="donor-details"><article class="card dashboard-stat"><span class="dashboard-icon" aria-hidden="true">◆</span><div><span>Grupo sanguíneo</span><strong>${u.bloodType}${u.rh}</strong></div></article><article class="card dashboard-stat"><span class="dashboard-icon" aria-hidden="true">⌖</span><div><span>Localidad</span><strong>${escapeText(u.city)}</strong></div></article></div><section class="dashboard-section"><div class="dashboard-head"><div><h2>Solicitudes compatibles</h2><p>Casos que podrían coincidir con tu grupo sanguíneo y localidad.</p><p class="help">${compatibilityNotice}</p></div><div class="dashboard-actions"><a class="btn btn-primary" href="solicitudes.html">Ver solicitudes compatibles</a><a class="btn btn-outline" href="perfil.html">Editar perfil</a></div></div><div id="matches" class="grid grid-2"></div></section>`;
+    const list = $("#matches");
+    matches
+      .slice(0, 4)
+      .forEach((r) =>
+        list.append(
+          requestCard(r, [
+            action(
+              "Ver detalle",
+              `detalle-solicitud.html?id=${r.id}`,
+              "outline",
+            ),
+          ]),
+        ),
+      );
+    if (!matches.length)
+      list.innerHTML =
+        '<div class="empty-state"><h3>No hay solicitudes compatibles disponibles.</h3><p>Podés volver a consultar más tarde o revisar otras localidades.</p></div>';
+  } else {
+    const mine = getRequests().filter((r) => r.ownerId === u.id),
+      active = mine.filter((r) => r.status === "active").length,
+      resolved = mine.filter((r) => r.status === "resolved").length;
+    area.innerHTML = `<div class="patient-summary"><article class="card dashboard-stat dashboard-stat--primary dashboard-stat--active"><span class="dashboard-icon" aria-hidden="true">!</span><div><span>Solicitudes activas</span><strong>${active}</strong></div></article><article class="card dashboard-stat dashboard-stat--resolved"><span class="dashboard-icon" aria-hidden="true">✓</span><div><span>Solicitudes resueltas</span><strong>${resolved}</strong></div></article><article class="card dashboard-stat dashboard-stat--total"><span class="dashboard-icon" aria-hidden="true">▤</span><div><span>Total publicadas</span><strong>${mine.length}</strong></div></article></div><article class="card patient-cta"><div><h2>Nueva solicitud</h2><p>Publicá los datos necesarios para encontrar donantes.</p></div><a class="btn" href="nueva-solicitud.html">+ Nueva solicitud</a></article><div class="patient-paths"><article class="card path-card"><h2><span class="dashboard-icon" aria-hidden="true">●</span>Mis solicitudes activas</h2><p>Revisá y administrá las solicitudes que todavía están abiertas.</p><a class="btn btn-primary" href="mis-solicitudes.html">Ver solicitudes activas</a></article><article class="card path-card"><h2><span class="dashboard-icon" aria-hidden="true">✓</span>Solicitudes resueltas</h2><p>Consultá las solicitudes completadas que forman parte de tu historial.</p><a class="btn btn-outline" href="mis-solicitudes.html">Ver solicitudes resueltas</a></article></div>`;
+  }
+}
+function profile() {
+  const u = requireAuth();
+  if (!u) return;
+  $("#profile-summary").innerHTML =
+    `<div class="avatar">${initials(u)}</div><div><h1>${escapeText(u.firstName)} ${escapeText(u.lastName)}</h1><p>${u.role === "donor" ? "Donante" : "Paciente / Responsable"} · ${u.bloodType}${u.rh}</p></div>`;
+  const f = $("#profile-form");
+  ["firstName", "lastName", "email", "phone", "city"].forEach(
+    (k) => (f.elements[k].value = u[k] || ""),
+  );
+  f.elements.bloodType.value = `${u.bloodType}${u.rh}`;
+  const profileCity = attachCityAutocomplete(
+      f.elements.city,
+      $("#profile-city-suggestions"),
+    ),
+    avail = $("#availability-field"),
+    participationLabel = avail.querySelector("strong"),
+    participationHelp = avail.querySelector(".help");
+  avail.hidden = false;
+  f.elements.available.checked = !!u.available;
+  participationLabel.textContent =
+    u.role === "donor"
+      ? "Estoy dispuesto para donar"
+      : "Estoy dispuesto a recibir donaciones";
+  participationHelp.textContent =
+    u.role === "donor"
+      ? "Tu disponibilidad informa tu intención actual de donar. La aptitud definitiva debe ser evaluada por el centro de salud."
+      : "Este estado informa tu disposición actual para recibir donaciones.";
+  f.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const v = values(f);
+    if (!validEmail(v.email) || !validPhone(v.phone) || !clean(v.firstName))
+      return showMessage("Revisá los datos del perfil.", "error");
+    const cityError = f.querySelector('[data-error="city"]');
+    if (!profileCity.isValid()) {
+      cityError.textContent =
+        "Seleccioná una localidad válida de las sugerencias.";
+      f.elements.city.setAttribute("aria-invalid", "true");
+      f.elements.city.focus();
+      return showMessage(
+        "Seleccioná una localidad válida de las sugerencias.",
+        "error",
+      );
+    }
+    cityError.textContent = "";
+    f.elements.city.removeAttribute("aria-invalid");
+    const blood = splitBlood(v.bloodType),
+      save = () => {
+        updateUser(u.id, {
+          firstName: clean(v.firstName),
+          lastName: clean(v.lastName),
+          email: clean(v.email),
+          phone: clean(v.phone),
+          bloodType: blood.bloodType,
+          rh: blood.rh,
+          city: clean(v.city),
+          available: v.available === "on",
+        });
+        setFlash("Perfil actualizado.");
+        location.reload();
+      };
+    if (blood.bloodType !== u.bloodType || blood.rh !== u.rh)
+      confirmDialog(
+        "Confirmar grupo sanguíneo",
+        "Este dato influye en las coincidencias orientativas. ¿Confirmás el cambio?",
+        save,
+      );
+    else save();
+  });
+}
+function requestForm(edit = false) {
+  if (apiAuthMode) return apiRequestForm(edit);
+  const u = requireAuth("patient");
+  if (!u) return;
+  const f = $("#request-form");
+  let existing = null;
+  if (edit) {
+    existing = getRequest(q.get("id"));
+    if (!existing || existing.ownerId !== u.id) {
+      showMessage("No tenés permiso para editar esta solicitud.", "error");
+      f.hidden = true;
+      return;
+    }
+    ["hospital", "city", "urgency", "phone", "email", "description"].forEach(
+      (k) => (f.elements[k].value = existing[k] || ""),
+    );
+    f.elements.bloodType.value = `${existing.bloodType}${existing.rh}`;
+  } else {
+    f.elements.city.value = u.city || "";
+    f.elements.phone.value = u.phone || "";
+    f.elements.email.value = u.email || "";
+  }
+  f.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const v = values(f),
+      rules = {
+        bloodType: (x) => (x ? "" : "Elegí un grupo."),
+        hospital: (x) => (clean(x) ? "" : "Ingresá el centro de salud."),
+        city: (x) => (clean(x) ? "" : "Ingresá la localidad."),
+        urgency: (x) => (x ? "" : "Elegí la urgencia."),
+        phone: (x) => (validPhone(x) ? "" : "Ingresá un teléfono válido."),
+        email: (x) => (validEmail(x) ? "" : "Ingresá un email válido."),
+        description: (x) =>
+          clean(x).length >= 10 ? "" : "Escribí al menos 10 caracteres.",
+      };
+    if (!validate(f, rules))
+      return showMessage("Revisá los campos señalados.", "error");
+    const blood = splitBlood(v.bloodType),
+      data = {
+        bloodType: blood.bloodType,
+        rh: blood.rh,
+        hospital: clean(v.hospital),
+        city: clean(v.city),
+        urgency: v.urgency,
+        phone: clean(v.phone),
+        email: clean(v.email),
+        description: clean(v.description),
+      };
+    edit ? updateRequest(existing.id, u.id, data) : createRequest(data, u.id);
+    setFlash(edit ? "Solicitud actualizada." : "Solicitud publicada.");
+    location.href = "mis-solicitudes.html";
+  });
+}
+async function apiRequestForm(edit = false) {
+  const me = (await apiFetch("/users/me")).data;
+  if (me?.role !== "patient") return location.replace("panel.html");
+  const f = $("#request-form");
+  let existing = null;
+  if (edit) {
+    existing = (await apiFetch(`/blood-requests/${q.get("id")}`)).data;
+    if (!existing) return location.replace("mis-solicitudes.html");
+    ["hospital", "city", "phone", "email", "description"].forEach((key) => {
+      const field = f.elements[key];
+      if (field) field.value = existing[key === "phone" ? "contactPhone" : key] || "";
+    });
+    f.elements.urgency.value = ({ high: "ALTO", medium: "MEDIO", low: "BAJO" }[existing.priority] || "");
+    f.elements.bloodType.value = `${existing.bloodType}${existing.rhFactor}`;
+  } else {
+    const profile = (await apiFetch("/users/me/profile")).data;
+    f.elements.city.value = profile?.city || "";
+    f.elements.phone.value = profile?.phone || "";
+    f.elements.email.value = me.email || "";
+  }
+  f.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const v = values(f), rules = {
+      bloodType: (x) => (x ? "" : "Elegí un grupo."),
+      hospital: (x) => (clean(x) ? "" : "Ingresá el centro de salud."),
+      city: (x) => (clean(x) ? "" : "Ingresá la localidad."),
+      urgency: (x) => (x ? "" : "Elegí la urgencia."),
+      phone: (x) => (validPhone(x) ? "" : "Ingresá un teléfono válido."),
+      email: (x) => (validEmail(x) ? "" : "Ingresá un email válido."),
+      description: (x) => (clean(x).length >= 10 ? "" : "Escribí al menos 10 caracteres."),
+    };
+    if (!validate(f, rules)) return showMessage("Revisá los campos señalados.", "error");
+    const blood = splitBlood(v.bloodType), body = {
+      bloodType: blood.bloodType, rhFactor: blood.rh, hospital: clean(v.hospital),
+      city: clean(v.city), priority: ({ ALTO: "high", MEDIO: "medium", BAJO: "low" }[v.urgency] || v.urgency.toLowerCase()), contactPhone: clean(v.phone),
+      contactEmail: clean(v.email), description: clean(v.description),
+    };
+    const submit = f.querySelector("button[type=submit]");
+    submit.disabled = true; submit.textContent = "Procesando…";
+    try {
+      const result = edit
+        ? await apiJson(`/blood-requests/${existing.id}`, "PATCH", body)
+        : await apiJson("/blood-requests", "POST", body);
+      sessionStorage.setItem("rv_api_request_notice", edit ? "Solicitud actualizada." : "Solicitud publicada.");
+      location.href = edit ? `detalle-solicitud.html?id=${result.data.id}` : "mis-solicitudes.html";
+    } catch (error) {
+      submit.disabled = false; submit.textContent = edit ? "Guardar cambios" : "Publicar solicitud";
+      showMessage(error.status ? "No pudimos guardar la solicitud." : "No pudimos conectar con RedVital. Intentá nuevamente.", "error");
+    }
+  });
+}
+function myRequests() {
+  if (apiAuthMode) return apiMyRequests();
+  const u = requireAuth("patient");
+  if (!u) return;
+  const all = getRequests().filter((r) => r.ownerId === u.id);
+  function draw(status, target) {
+    const box = $(target),
+      rows = all.filter((r) => r.status === status);
+    if (!rows.length) {
+      box.innerHTML =
+        status === "active"
+          ? '<div class="empty-state"><h3>Todavía no publicaste solicitudes activas.</h3><p>Creá una solicitud para empezar a conectar.</p><a class="btn btn-primary" href="nueva-solicitud.html">Crear mi primera solicitud</a></div>'
+          : '<div class="empty-state"><h3>No hay solicitudes resueltas.</h3><p>Cuando cierres una solicitud seguirá disponible acá como historial.</p></div>';
+      return;
+    }
+    rows.forEach((r) => {
+      const acts = [action("Ver", `detalle-solicitud.html?id=${r.id}`)];
+      if (status === "active") {
+        acts.push(action("Editar", `editar-solicitud.html?id=${r.id}`));
+        const b = document.createElement("button");
+        b.className = "btn btn-danger";
+        b.textContent = "Marcar solicitud como resuelta";
+        b.onclick = () =>
+          confirmDialog(
+            "Marcar solicitud como resuelta",
+            "La solicitud dejará de mostrarse entre las activas y quedará en tu historial.",
+            () => {
+              resolveRequest(r.id, u.id);
+              setFlash("Solicitud marcada como resuelta.");
+              location.reload();
+            },
+          );
+        acts.push(b);
+      }
+      box.append(requestCard(r, acts));
+    });
+  }
+  draw("active", "#active-list");
+  draw("resolved", "#resolved-list");
+}
+async function apiMyRequests() {
+  const me = (await apiFetch("/users/me")).data;
+  if (me?.role !== "patient") return location.replace("panel.html");
+  const rows = (await apiFetch("/users/me/blood-requests")).data || [];
+  const draw = (status, target) => {
+    const box = $(target), items = rows.filter((r) => r.status === status);
+    box.replaceChildren();
+    if (!items.length) {
+      box.innerHTML = status === "active"
+        ? '<div class="empty-state"><h3>Todavía no publicaste solicitudes activas.</h3><p>Creá una solicitud para empezar a conectar.</p><a class="btn btn-primary" href="nueva-solicitud.html">Crear mi primera solicitud</a></div>'
+        : '<div class="empty-state"><h3>No hay solicitudes resueltas.</h3><p>Cuando cierres una solicitud seguirá disponible acá como historial.</p></div>';
+      return;
+    }
+    items.forEach((r) => {
+      const acts = [action("Ver", `detalle-solicitud.html?id=${r.id}`)];
+      if (status === "active") {
+        acts.push(action("Editar", `editar-solicitud.html?id=${r.id}`));
+        const button = document.createElement("button"); button.className = "btn btn-danger";
+        button.textContent = "Marcar solicitud como resuelta";
+        button.onclick = async () => { if (!confirm("¿Querés marcar esta solicitud como resuelta?")) return; await apiJson(`/blood-requests/${r.id}/status`, "PATCH", { status: "resolved" }); location.reload(); };
+        acts.push(button);
+      }
+      box.append(requestCard(r, acts));
+    });
+  };
+  draw("active", "#active-list"); draw("resolved", "#resolved-list");
+}
+function donorRequests() {
+  const u = requireAuth("donor");
+  if (!u) return;
+  const all = compatibleRequests(u),
+    blood = $("#filter-blood"),
+    city = $("#filter-city"),
+    cityList = $("#filter-city-suggestions"),
+    urgency = $("#filter-urgency");
+  let selectedCity = "";
+  function draw() {
+    const rows = all.filter(
+      (r) =>
+        (!blood.value || `${r.bloodType}${r.rh}` === blood.value) &&
+        (!selectedCity ||
+          normalizeCity(r.city) === normalizeCity(selectedCity)) &&
+        (!urgency.value || r.urgency === urgency.value),
+    );
+    $("#results-count").textContent =
+      `${rows.length} ${rows.length === 1 ? "solicitud compatible" : "solicitudes compatibles"}`;
+    const list = $("#request-list");
+    list.replaceChildren();
+    if (!rows.length)
+      return (list.innerHTML =
+        '<div class="empty-state"><h3>No hay solicitudes compatibles con estos filtros.</h3><p>Probá con una combinación diferente o volvé a consultar más tarde.</p></div>');
+    rows.forEach((r) =>
+      list.append(
+        requestCard(r, [
+          action("Ver detalle", `detalle-solicitud.html?id=${r.id}`, "primary"),
+        ]),
+      ),
+    );
+  }
+  const cityAutocomplete = attachCityAutocomplete(city, cityList, {
+    catalog: [...CITIES, ...all.map((r) => r.city)],
+    maxResults: 10,
+    onSelect: (value) => {
+      selectedCity = value;
+      draw();
+    },
+    onInput: (value) => {
+      selectedCity = "";
+      if (!value.trim()) draw();
+    },
+  });
+  [blood, urgency].forEach((control) =>
+    control.addEventListener("change", draw),
+  );
+  $("#clear-filters").onclick = () => {
+    blood.value = "";
+    urgency.value = "";
+    selectedCity = "";
+    cityAutocomplete.clear();
+    draw();
+  };
+  $("#compatible-only").hidden = false;
+  draw();
+}
+function detail() {
+  if (apiAuthMode) return apiDetail();
+  const u = requireAuth(["donor", "patient", "admin"]);
+  if (!u) return;
+  const r = getRequest(q.get("id")),
+    canAccess =
+      r &&
+      (u.role === "admin" ||
+        (u.role === "patient" && r.ownerId === u.id) ||
+        (u.role === "donor" &&
+          compatibleRequests(u).some((item) => item.id === r.id)));
+  if (!canAccess) {
+    location.replace(
+      u.role === "donor"
+        ? "solicitudes.html"
+        : u.role === "patient"
+          ? "mis-solicitudes.html"
+          : "admin.html",
+    );
+    return;
+  }
+  $("#detail").append(requestCard(r));
+  $("#detail-meta").innerHTML =
+    `<div class="grid grid-2"><article class="card"><h2>Datos de la solicitud</h2><p><strong>Grupo:</strong> ${r.bloodType}${r.rh}</p><p><strong>Centro:</strong> ${escapeText(r.hospital)}</p><p><strong>Localidad:</strong> ${escapeText(r.city)}</p><p><strong>Prioridad:</strong> ${priorityBadge(r.urgency)}</p><p><strong>Fecha:</strong> ${formatDate(r.createdAt)}</p><p><strong>Estado:</strong> ${r.status === "active" ? "Activa" : "Resuelta"}</p></article><article class="card"><h2>Contacto autorizado</h2><p>Usá estos canales únicamente para coordinar con el responsable y el centro de salud.</p><div class="button-row"><a class="btn btn-primary" target="_blank" rel="noopener" href="https://wa.me/${r.phone.replace(/\D/g, "")}?text=${encodeURIComponent("Hola, vi la solicitud publicada en RedVital y quería comunicarme para consultar cómo colaborar con la donación.")}">Contactar por WhatsApp</a><a class="btn btn-outline" href="mailto:${encodeURIComponent(r.email)}?subject=${encodeURIComponent("Consulta sobre solicitud en RedVital")}&body=${encodeURIComponent("Hola, vi la solicitud publicada en RedVital y quería consultar cómo colaborar con la donación.")}">Enviar correo</a></div></article></div>`;
+}
+async function apiDonorRequests() {
+  const me = (await apiFetch("/users/me")).data;
+  if (me?.role !== "donor") return location.replace("panel.html");
+  const profile = (await apiFetch("/users/me/profile")).data;
+  const all = ((await apiFetch("/blood-requests")).data || []).filter((r) => r.status === "active");
+  const blood = $("#filter-blood"), city = $("#filter-city"), urgency = $("#filter-urgency");
+  let selectedCity = "";
+  const donorBlood = `${profile?.bloodType || ""}${profile?.rhFactor || ""}`;
+  const compatible = (r) => r.city && normalizeCity(r.city) === normalizeCity(profile?.city || "") && isCompatible(profile?.bloodType, profile?.rhFactor, r.bloodType, r.rhFactor);
+  const draw = () => {
+    const rows = all.filter((r) => compatible(r) && (!blood.value || `${r.bloodType}${r.rhFactor}` === blood.value) && (!selectedCity || normalizeCity(r.city) === normalizeCity(selectedCity)) && (!urgency.value || ({ ALTO: "high", MEDIO: "medium", BAJO: "low" }[urgency.value] === r.priority)));
+    $("#results-count").textContent = `${rows.length} ${rows.length === 1 ? "solicitud compatible" : "solicitudes compatibles"}`;
+    const list = $("#request-list"); list.replaceChildren();
+    if (!rows.length) list.innerHTML = '<div class="empty-state"><h3>No hay solicitudes compatibles con estos filtros.</h3><p>Probá con una combinación diferente o volvé a consultar más tarde.</p></div>';
+    rows.forEach((r) => list.append(requestCard(r, [action("Ver detalle", `detalle-solicitud.html?id=${r.id}`, "primary")])));
+  };
+  const cityAutocomplete = attachCityAutocomplete(city, $("#filter-city-suggestions"), { catalog: [...CITIES, ...all.map((r) => r.city)], maxResults: 10, onSelect: (value) => { selectedCity = value; draw(); }, onInput: (value) => { selectedCity = value.trim(); draw(); } });
+  [blood, urgency].forEach((control) => control.addEventListener("change", draw));
+  $("#clear-filters").onclick = () => { blood.value = ""; urgency.value = ""; selectedCity = ""; cityAutocomplete.clear(); draw(); };
+  $("#compatible-only").hidden = false; draw();
+}
+async function apiDetail() {
+  const me = (await apiFetch("/users/me")).data;
+  const r = (await apiFetch(`/blood-requests/${q.get("id")}`)).data;
+  if (me?.role === "donor") {
+    const p = (await apiFetch("/users/me/profile")).data;
+    if (r.status !== "active" || normalizeCity(r.city) !== normalizeCity(p.city) || !isCompatible(p.bloodType, p.rhFactor, r.bloodType, r.rhFactor)) return location.replace("solicitudes.html");
+  } else if (me?.role === "patient") {
+    const mine = (await apiFetch("/users/me/blood-requests")).data || [];
+    if (!mine.some((item) => item.id === r.id)) return location.replace("mis-solicitudes.html");
+  }
+  $("#detail").append(requestCard(r));
+  const phone = String(r.contactPhone ?? "").trim();
+  const email = String(r.contactEmail ?? "").trim();
+  const whatsappNumber = phone.replace(/\D/g, "");
+  const contactMessage = "Hola, vi la solicitud publicada en RedVital y quería comunicarme para consultar cómo colaborar con la donación.";
+  const contactCard = phone || email
+    ? `<article class="card"><h2>Contacto autorizado</h2><p>Usá estos canales únicamente para coordinar con el responsable y el centro de salud.</p>${phone ? `<p><strong>Teléfono / WhatsApp:</strong> ${escapeText(phone)}</p>` : ""}${email ? `<p><strong>Email:</strong> ${escapeText(email)}</p>` : ""}<div class="button-row">${phone ? `<a class="btn btn-primary" target="_blank" rel="noopener" href="https://wa.me/${whatsappNumber}?text=${encodeURIComponent(contactMessage)}">Contactar por WhatsApp</a>` : ""}${email ? `<a class="btn btn-outline" href="mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent("Consulta sobre solicitud en RedVital")}&body=${encodeURIComponent(contactMessage)}">Enviar correo</a>` : ""}</div><p class="help">RedVital facilita el contacto. La coordinación y validación definitiva de la donación debe realizarse con el centro de salud correspondiente.</p></article>`
+    : `<article class="card"><h2>Contacto autorizado</h2><p>No hay información de contacto disponible para esta solicitud.</p><p class="help">RedVital facilita el contacto. La coordinación y validación definitiva de la donación debe realizarse con el centro de salud correspondiente.</p></article>`;
+  $("#detail-meta").innerHTML = `<div class="grid grid-2"><article class="card"><h2>Datos de la solicitud</h2><p><strong>Grupo:</strong> ${escapeText(r.bloodType)}${escapeText(r.rhFactor)}</p><p><strong>Centro:</strong> ${escapeText(r.hospital)}</p><p><strong>Localidad:</strong> ${escapeText(r.city)}</p><p><strong>Prioridad:</strong> ${priorityBadge(r.priority)}</p><p><strong>Fecha:</strong> ${formatDate(r.createdAt)}</p><p><strong>Estado:</strong> ${r.status === "active" ? "Activa" : "Resuelta"}</p></article>${contactCard}</div>`;
+}
+function admin() {
+  const u = requireAuth("admin");
+  if (!u) return;
+  const users = getUsers(),
+    requests = getRequests(),
+    userList = $("#admin-users"),
+    requestList = $("#admin-requests");
+  $("#admin-welcome").textContent =
+    `Administración de RedVital · ${u.firstName}`;
+  users
+    .filter((item) => item.id !== u.id)
+    .forEach((item) => {
+      const card = document.createElement("article");
+      card.className = "card";
+      card.innerHTML = `<h3>${escapeText(item.firstName)} ${escapeText(item.lastName)}</h3><p>${item.role === "donor" ? "Donante" : "Paciente"} · ${escapeText(item.email)}</p><p>${item.bloodType}${item.rh} · ${escapeText(item.city)}</p>`;
+      if (item.role === "donor") {
+        const button = document.createElement("button");
+        button.className = "btn btn-outline";
+        button.textContent = item.available
+          ? "Desactivar disponibilidad"
+          : "Activar disponibilidad";
+        button.onclick = () => {
+          updateUser(item.id, { available: !item.available });
+          location.reload();
+        };
+        card.append(button);
+      }
+      userList.append(card);
+    });
+  requests.forEach((r) => {
+    const button = document.createElement("button");
+    button.className = "btn btn-outline";
+    button.textContent =
+      r.status === "active" ? "Marcar resuelta" : "Reactivar";
+    button.onclick = () => {
+      setRequestStatus(r.id, r.status === "active" ? "resolved" : "active");
+      location.reload();
+    };
+    requestList.append(
+      requestCard(r, [
+        action("Ver detalle", `detalle-solicitud.html?id=${r.id}`),
+        button,
+      ]),
+    );
+  });
+}
+function reset() {
+  const b = $("#reset-demo");
+  if (b)
+    b.onclick = () =>
+      confirmDialog(
+        "Restablecer datos demo",
+        "Se eliminarán los datos guardados en este navegador y volverán los ejemplos iniciales.",
+        () => {
+          resetDemo();
+          location.reload();
+        },
+      );
+}
+document
+  .querySelectorAll(
+    apiAuthMode
+      ? "#request-form"
+      : "#register-form,#profile-form,#request-form",
+  )
+  .forEach((form) => {
+    const locations = setupLocationFields(form);
+    if (!locations) return;
+    form.addEventListener(
+      "submit",
+      (event) => {
+        if (!locations.province.isValid()) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          const error = form.querySelector('[data-error="province"]');
+          if (error)
+            error.textContent =
+              "Seleccioná una provincia válida de las sugerencias.";
+          form.elements.province.focus();
+          return;
+        }
+        if (!locations.city.isValid()) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          const error = form.querySelector('[data-error="city"]');
+          if (error)
+            error.textContent =
+              "Seleccioná una localidad válida de las sugerencias.";
+          form.elements.city.focus();
+        }
+      },
+      true,
+    );
+  });
+if (!apiAuthMode) {
+  register();
+  loginPage();
+  passwordRecovery();
+  if (page === "panel") panel();
+  if (page === "perfil") profile();
+}
+if (page === "nueva") requestForm();
+if (page === "editar") requestForm(true);
+if (page === "mis-solicitudes") myRequests();
+if (page === "solicitudes") apiAuthMode ? apiDonorRequests() : donorRequests();
+if (page === "detalle") detail();
+if (page === "admin") admin();
+reset();
 
-
-const prepareSubmitState=form=>{const submit=form?.querySelector('button[type="submit"],input[type="submit"]');if(!submit)return;form.addEventListener('submit',()=>{if(submit.disabled)return;submit.disabled=true;submit.dataset.defaultLabel=submit.textContent;submit.textContent='Procesando…';setTimeout(()=>{if(!document.body.contains(submit))return;submit.disabled=false;submit.textContent=submit.dataset.defaultLabel},900)},{capture:true})};document.querySelectorAll('#register-form,#login-form,#profile-form,#request-form').forEach(prepareSubmitState);
-import{attachProvinceAutocomplete,findLocationProvince,findLocation}from'./cities.js';
-setTimeout(()=>document.querySelectorAll('#register-form,#profile-form,#request-form').forEach(form=>{const location=findLocation(form.elements.city?.value);if(location){form.elements.province?._locationAutocomplete?.setValue(location.province);form.elements.city?._locationAutocomplete?.setValue(location);form.elements.city?._locationAutocomplete?.setProvince(location.province)}}),0);
+const prepareSubmitState = (form) => {
+  const submit = form?.querySelector(
+    'button[type="submit"],input[type="submit"]',
+  );
+  if (!submit) return;
+  form.addEventListener(
+    "submit",
+    () => {
+      if (submit.disabled) return;
+      submit.disabled = true;
+      submit.dataset.defaultLabel = submit.textContent;
+      submit.textContent = "Procesando…";
+      setTimeout(() => {
+        if (!document.body.contains(submit)) return;
+        submit.disabled = false;
+        submit.textContent = submit.dataset.defaultLabel;
+      }, 900);
+    },
+    { capture: true },
+  );
+};
+if (!apiAuthMode)
+  document
+    .querySelectorAll("#register-form,#login-form,#profile-form,#request-form")
+    .forEach(prepareSubmitState);
+import {
+  attachProvinceAutocomplete,
+  findLocationProvince,
+  findLocation,
+} from "./cities.js";
+setTimeout(
+  () =>
+    document
+      .querySelectorAll("#register-form,#profile-form,#request-form")
+      .forEach((form) => {
+        const location = findLocation(form.elements.city?.value);
+        if (location) {
+          form.elements.province?._locationAutocomplete?.setValue(
+            location.province,
+          );
+          form.elements.city?._locationAutocomplete?.setValue(location);
+          form.elements.city?._locationAutocomplete?.setProvince(
+            location.province,
+          );
+        }
+      }),
+  0,
+);

@@ -4,7 +4,6 @@ import { RedVitalApiClient } from "../../../packages/api-client/dist/index.js";
 import dotenv from "dotenv";
 
 dotenv.config({ path: new URL("../../api/.env", import.meta.url) });
-process.env.DATABASE_URL = "file:./apps/api/prisma/dev.db";
 
 const baseUrl = process.env.REDVITAL_API_BASE_URL || "http://127.0.0.1:3001";
 const database = createDatabaseClient(loadEnvironment().DATABASE_URL);
@@ -14,8 +13,8 @@ const checks = [];
 const check = (name, ok, detail = "") => { checks.push({ name, ok }); if (!ok) throw new Error(`${name}: ${detail}`); console.log(`${name} PASS`); };
 const call = async (path, options = {}) => { const response = await fetch(`${baseUrl}${path}`, { ...options, headers: { "content-type": "application/json", ...(options.headers || {}) } }); let body = null; try { body = await response.json(); } catch {} return { response, body }; };
 const json = (method, body, token) => ({ method, headers: token ? { authorization: `Bearer ${token}` } : {}, ...(method === "GET" ? {} : { body: JSON.stringify(body) }) });
-const register = (role, email) => ({ firstName: "Mobile", lastName: "Request", email, password, phone: "+5491112345678", bloodType: "O", rhFactor: "+", city: "Smoke City", role, available: false });
-const payload = (extra = {}) => ({ bloodType: "O", rhFactor: "+", hospital: "Hospital Mobile", city: "Smoke City", priority: "high", contactPhone: "+5491112345678", contactEmail: `${unique}-patient@example.com`, description: "Solicitud mobile real de prueba.", ...extra });
+const register = (role, email) => ({ firstName: "Mobile", lastName: "Request", email, password, phone: "+5491112345678", bloodType: "O", rhFactor: "+", city: "Avellaneda", role, available: false });
+const payload = (extra = {}) => ({ bloodType: "O", rhFactor: "+", hospital: "Hospital Mobile", city: "Avellaneda", priority: "high", contactPhone: "+5491112345678", contactEmail: `${unique}-patient@example.com`, description: "Solicitud mobile real de prueba.", ...extra });
 const login = async (email) => { const result = await call("/auth/login", json("POST", { email, password, client: "mobile" })); return { result, access: result.body?.accessToken, refresh: result.body?.refreshToken }; };
 try {
   for (const [role, suffix] of [["patient", "patient"], ["donor", "donor"], ["patient", "other"]]) { const x = await call("/auth/register", json("POST", register(role, `${unique}-${suffix}@example.com`))); check(`register ${suffix}`, x.response.status === 201); }
@@ -27,7 +26,7 @@ try {
   x = await call("/blood-requests", json("POST", payload())); check("no token create rejected", x.response.status === 401);
   x = await call("/blood-requests", json("GET", {}, donor.access)); check("donor list", x.response.status === 200 && x.body.some((item) => item.id === id));
   x = await call("/blood-requests?bloodType=O", json("GET", {}, donor.access)); check("blood filter", x.response.status === 200 && x.body.some((item) => item.id === id));
-  x = await call("/blood-requests?city=Smoke%20City", json("GET", {}, donor.access)); check("locality filter", x.response.status === 200 && x.body.some((item) => item.id === id));
+  x = await call("/blood-requests?city=Avellaneda", json("GET", {}, donor.access)); check("locality filter", x.response.status === 200 && x.body.some((item) => item.id === id));
   x = await call(`/blood-requests/${id}`, json("GET", {}, donor.access)); check("detail existing", x.response.status === 200 && x.body.id === id);
   x = await call("/blood-requests/00000000-0000-4000-8000-000000000000", json("GET", {}, donor.access)); check("detail missing", x.response.status === 404);
   x = await call("/users/me/blood-requests", json("GET", {}, patient.access)); check("owner own list", x.response.status === 200 && x.body.some((item) => item.id === id));

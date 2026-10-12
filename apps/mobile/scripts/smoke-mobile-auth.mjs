@@ -5,7 +5,7 @@ const checks = [];
 const check = (name, ok, detail = "") => { checks.push({ name, ok }); if (!ok) throw new Error(`${name}: ${detail}`); console.log(`${name} PASS`); };
 const call = async (path, options = {}) => { const response = await fetch(`${baseUrl}${path}`, { ...options, headers: { "content-type": "application/json", ...(options.headers || {}) } }); let body = null; try { body = await response.json(); } catch {} return { response, body }; };
 const json = (method, body, accessToken) => ({ method, headers: accessToken ? { authorization: `Bearer ${accessToken}` } : {}, ...(method === "GET" || method === "HEAD" ? {} : { body: JSON.stringify(body) }) });
-const registration = { firstName: "Mobile", lastName: "Smoke", email, password, phone: "+5491112345678", bloodType: "O", rhFactor: "+", city: "Smoke City", role: "donor", available: false };
+const registration = { firstName: "Mobile", lastName: "Smoke", email, password, phone: "+5491112345678", bloodType: "O", rhFactor: "+", city: "Avellaneda", role: "donor", available: false };
 try {
   let x = await call("/auth/register", json("POST", registration)); check("register mobile user", x.response.status === 201, String(x.response.status));
   x = await call("/auth/login", json("POST", { email, password, client: "mobile" })); const access = x.body?.accessToken; const refresh = x.body?.refreshToken; check("mobile login", x.response.status === 200); check("access token received", typeof access === "string" && access.length > 20); check("refresh token received", typeof refresh === "string" && refresh.length > 20); check("login response safe", !JSON.stringify(x.body).match(/passwordHash|password[^A-Za-z]|tokenHash/i));

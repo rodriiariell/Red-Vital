@@ -4,6 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node serve-legacy.mjs"
+    "dev": "node server.mjs"
   }
 }

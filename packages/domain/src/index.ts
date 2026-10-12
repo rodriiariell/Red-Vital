@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { localitySchema } from "./localities.js";
+export { isKnownLocality, localitySchema, normalizeLocality } from "./localities.js";
 
 export const userRoles = ["donor", "patient", "admin"] as const;
 export const userRoleSchema = z.enum(userRoles);
@@ -78,7 +80,7 @@ export const emailSchema = z.string().trim().email().max(320).transform((value) 
 export const publicRegistrationSchema = z.object({
   firstName: z.string().trim().min(1).max(100), lastName: z.string().trim().min(1).max(100),
   email: emailSchema, password: passwordSchema, phone: phoneSchema,
-  bloodType: bloodTypeSchema, rhFactor: rhFactorSchema, city: z.string().trim().min(1).max(160),
+  bloodType: bloodTypeSchema, rhFactor: rhFactorSchema, city: localitySchema,
   role: z.enum(["donor", "patient"]), available: z.boolean().default(false)
 });
 export type PublicRegistration = z.infer<typeof publicRegistrationSchema>;

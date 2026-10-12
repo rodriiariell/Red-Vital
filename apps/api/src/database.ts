@@ -1,5 +1,7 @@
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { PrismaClient } from "../generated/prisma/client.js";
+import { isAbsolute, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 /**
  * Factory for the local SQLite development database.
@@ -7,6 +9,10 @@ import { PrismaClient } from "../generated/prisma/client.js";
  * can expose diagnostics while a database is being provisioned.
  */
 export function createDatabaseClient(databaseUrl: string) {
-  const adapter = new PrismaLibSql({ url: databaseUrl });
+  const url = databaseUrl.startsWith("file:") ? databaseUrl.slice("file:".length) : null;
+  const resolvedDatabaseUrl = url && !url.startsWith("//") && !isAbsolute(url)
+    ? pathToFileURL(resolve(fileURLToPath(new URL("../../", import.meta.url)), url)).toString()
+    : databaseUrl;
+  const adapter = new PrismaLibSql({ url: resolvedDatabaseUrl });
   return new PrismaClient({ adapter });
 }

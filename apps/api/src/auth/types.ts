@@ -15,4 +15,5 @@ export interface AuthStore {
   consumePasswordResetToken(tokenHash: string, passwordHash: string): Promise<UserRecord | null>;
   audit(action: string, entity: string, entityId?: string, actorId?: string): Promise<void>;
   listUsers(): Promise<UserRecord[]>;
+  updateUserStatus(userId: string, status: UserStatus): Promise<UserRecord>;
 }

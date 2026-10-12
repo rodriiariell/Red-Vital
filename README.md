@@ -1,54 +1,133 @@
-# RedVital — MVP
+# RedVital
 
-RedVital es una aplicación web demostrativa que conecta a personas que publican solicitudes de donación de sangre con posibles donantes de su comunidad. El objetivo principal del MVP es que una solicitud pueda publicarse, encontrarse mediante filtros o compatibilidad orientativa y derivar en un contacto directo con el responsable.
+RedVital es una aplicación para coordinar solicitudes de donación de sangre con posibles donantes. La versión actual utiliza una web HTML/CSS/JavaScript conectada a una API Fastify, Prisma y una base SQLite local.
 
-## Ejecutar
+## Arquitectura actual
 
-No requiere instalación ni dependencias. Puede abrirse `index.html` directamente en un navegador moderno. Para evitar restricciones de módulos ES al usar `file://`, se recomienda servir la carpeta:
+- Web: HTML, CSS y JavaScript en la raíz del repositorio.
+- Servidor web: `apps/web`, que sirve los archivos y hace proxy de `/api` hacia la API.
+- Backend: Fastify + TypeScript.
+- Persistencia: Prisma con SQLite en desarrollo local.
+- Mobile: Expo + React Native + TypeScript, conectada a la misma API.
+- PostgreSQL: alternativa futura para producción; no es la base activa del entorno local.
 
-```powershell
-python -m http.server 8000
-```
-
-Luego abrir `http://localhost:8000`.
-
-## Usuarios demo
-
-- Donante: `donante@demo.redvital` / `Demo1234`
-- Paciente / Responsable: `paciente@demo.redvital` / `Demo1234`
-- Administradora: `admin@demo.redvital` / `Demo1234`
-
-Los ejemplos están identificados como “Demo”. Desde la landing se pueden restablecer los datos demostrativos. La acción elimina únicamente los datos de RedVital guardados por este navegador.
-
-## Flujos
-
-- Paciente / Responsable: registro, login, perfil, crear solicitud, listar las propias, editar, marcar solicitud como resuelta y logout.
-- Donante: registro, login, perfil con grupo sanguíneo, disponibilidad, solicitudes, filtros, detalle, WhatsApp, email y logout.
-- Administrador: panel propio para consultar usuarios y gestionar el estado de las solicitudes.
-- Acceso: páginas privadas protegidas y permisos de propietario antes de editar o resolver.
+La web actual usa la API y cookies de sesión. El código basado en `localStorage` todavía existe en `js/`, pero corresponde al prototipo legacy y no es el flujo principal de la navegación actual. La app mobile usa la API con `Authorization: Bearer`.
 
 ## Estructura
 
-- HTML: páginas independientes y semánticas para landing, acceso, panel, perfil y solicitudes.
-- `css/`: variables, base, componentes, páginas y responsive.
-- `js/storage.js`: persistencia y datos demo.
-- `js/auth.js` y `js/users.js`: sesión, acceso y usuarios.
-- `js/requests.js`: ciclo de vida y propiedad de solicitudes.
-- `js/compatibility.js`: única fuente de reglas de compatibilidad orientativa.
-- `js/validation.js`, `js/ui.js` y `js/app.js`: validación, componentes y controladores de vistas.
+```text
+apps/web/              Servidor web y proxy /api
+apps/api/              API Fastify, autenticación, solicitudes y Prisma
+apps/mobile/           App Expo/React Native
+packages/domain/       Tipos y validaciones compartibles
+packages/api-client/   Cliente HTTP usado por mobile
+js/                    Controladores y componentes de la web
+css/                   Estilos de la web
+*.html                 Pantallas web del MVP
+```
 
-## Privacidad y limitaciones
+## Instalación
 
-`localStorage` se utiliza exclusivamente como almacenamiento demostrativo. La sesión guarda únicamente el identificador del usuario y el acceso se resuelve por rol en JavaScript; esta capa debe sustituirse por sesiones y autorización del lado servidor al migrar a PHP. No es apropiado para producción: cualquier persona con acceso al navegador puede inspeccionar o modificar los datos y no existe autenticación segura del lado servidor. Aunque la interfaz nunca muestra contraseñas y evita insertar inputs como HTML sin escapar, este MVP conserva credenciales localmente para simular el login.
+Desde la raíz:
 
-Una versión productiva necesita backend, base de datos, contraseñas con hash, sesiones seguras, autorización del lado servidor, auditoría y políticas formales de privacidad. RedVital no almacena diagnósticos, historias clínicas ni coordenadas personales exactas.
+```powershell
+npm install
+```
 
-La compatibilidad se presenta como orientación para transfusión de glóbulos rojos y nunca como aptitud médica. La validación definitiva corresponde al centro de salud. El panel administrativo incluido es demostrativo y sus permisos deben trasladarse al servidor en una implementación productiva.
+Configuración local de la API:
 
-## Identidad institucional
+```text
+apps/api/.env.example → apps/api/.env
+```
 
-El repositorio recibido no contenía el logo oficial. La interfaz usa temporalmente una marca tipográfica generada con CSS para mantener navegación accesible. Cuando se proporcione `assets/logo-redvital.png`, debe sustituirse esa marca sin recolorear, recortar ni deformar el archivo.
+El archivo `.env` local no debe publicarse ni incluirse en documentación. Los secretos deben ser valores propios del entorno y nunca deben copiarse al repositorio.
 
-## Implementación reemplazada
+## Web
 
-El directorio de trabajo estaba vacío al iniciar, por lo que no se reemplazó ni eliminó una implementación anterior, documentación o assets. Git no estaba disponible en el entorno y no pudo crearse un checkpoint ni commit.
+```powershell
+npm run dev:web
+```
+
+Acceso:
+
+```text
+http://127.0.0.1:8000
+```
+
+El servidor de `apps/web/server.mjs` sirve la web y convierte las llamadas `/api/*` en requests hacia `http://127.0.0.1:3001`.
+
+## API
+
+Compilar:
+
+```powershell
+npm run build --workspace=@redvital/api
+```
+
+Iniciar la versión compilada:
+
+```powershell
+npm run start --workspace=@redvital/api
+```
+
+Desarrollo con observación de cambios:
+
+```powershell
+npm run dev:api
+```
+
+API local:
+
+```text
+http://127.0.0.1:3001
+```
+
+Health check:
+
+```text
+GET /health
+```
+
+Documentación OpenAPI:
+
+```text
+GET /docs
+GET /docs/json
+```
+
+## Base de datos
+
+La base actual de desarrollo es SQLite, configurada mediante `DATABASE_URL` y almacenada localmente en `apps/api/prisma/dev.db`.
+
+Comandos relacionados:
+
+```powershell
+npm run db:init:sqlite --workspace=@redvital/api
+npm run db:generate --workspace=@redvital/api
+```
+
+PostgreSQL está contemplado como alternativa futura/productiva, pero no es el proveedor activo de esta configuración local.
+
+## Mobile
+
+```powershell
+npm run dev:mobile
+```
+
+La URL de la API puede configurarse con `EXPO_PUBLIC_API_BASE_URL`. Si no se define, el cliente usa `127.0.0.1:3001` en iOS/web y `10.0.2.2:3001` en Android Emulator.
+
+La app mobile tiene pantallas de autenticación, perfil y solicitudes implementadas en código. Su validación visual completa todavía no está verificada.
+
+## Diferencias entre implementaciones
+
+- `localStorage`: mecanismo legacy del prototipo inicial; no es la persistencia principal actual.
+- Web actual: API Fastify mediante `/api` y cookies `httpOnly`.
+- Mobile: API Fastify mediante Bearer tokens; el access token vive en memoria y el refresh token se guarda en `expo-secure-store`.
+- SQLite: base activa para desarrollo local.
+- PostgreSQL: opción futura para producción.
+
+## Estado funcional
+
+La API incluye autenticación, perfiles, disponibilidad, solicitudes de sangre, filtros por query, administración y recuperación mediante tokens. El notifier de email de recuperación no está conectado por defecto, por lo que esa parte no debe considerarse una integración productiva completa.
+
+La compatibilidad sanguínea es orientativa. La validación definitiva corresponde al centro de salud.
